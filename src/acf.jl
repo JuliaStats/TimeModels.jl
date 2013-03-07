@@ -1,6 +1,6 @@
 acf = function(x::Array, n::Int)
 
-  acf_array = ones(length(n))
+  acf_array = ones(n)
  
   for i in 2:n
     acf_array[i] = cor(x[i+1:end], lag(x, i))

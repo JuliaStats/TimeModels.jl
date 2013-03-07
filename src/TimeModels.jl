@@ -8,7 +8,7 @@ export acf,
        arima, 
        garch, 
 ## testing
-       @timemodels,
+       @timemodels
 
 
 include("acf.jl")
@@ -17,3 +17,4 @@ include("garch.jl")
 include("testtimemodels.jl")
 
 end 
+
