@@ -13,11 +13,28 @@ type StateSpaceModel{T}
 	P0::Array{T}
 end
 
+type KalmanFiltered{T}
+	filtered::Array{T}
+	predicted::Array{T}
+	error_cov::Array{T}
+	model::StateSpaceModel
+	y::Array{T}
+end
+
+type KalmanSmoothed{T}
+	filtered::Array{T}
+	predicted::Array{T}
+	smoothed::Array{T}
+	error_cov::Array{T}
+	model::StateSpaceModel
+	y::Array{T}
+end
+
 function issquare(x::Array)
 	return size(x, 1) == size(x, 2)
 end
 
-function simulate_statespace(n, model)
+function simulate_statespace(n::Int, model::StateSpaceModel)
 	# Generates a realization of a state space model.
 	#
 	# Arguments:
@@ -48,7 +65,9 @@ function simulate_statespace(n, model)
 	return x', y'
 end
 
-function check_dimensions(model)
+function check_dimensions(model::StateSpaceModel)
+	@assert ndims(model.F) == ndims(model.G) == 2
+	@assert ndims(model.V) == ndims(model.W) == ndims(model.P0) == 2
 	@assert length(model.x0) == size(model.F, 2)
 	@assert size(model.F) == size(model.V)
 	@assert issquare(model.F)
@@ -59,24 +78,64 @@ function check_dimensions(model)
 	@assert issquare(model.P0)
 end
 
-function KalmanFilter(y, model)
+function kalman_filter(y::Array, model::StateSpaceModel)
 	check_dimensions(model)
 	n = size(y, 1)
 	y = y'
-	x_est = zeros(length(model.x0), n)
-	x_est[:, 1] = model.F * model.x0
+	x_filt = zeros(length(model.x0), n)
+	x_pred = zeros(size(x_filt))
+	P = zeros(size(model.P0, 1), size(model.P0, 2), n)
+	P[:, :, 1] = model.P0
 	P0 = model.P0
-	I = eye(size(x_est, 1))
+	I = eye(size(x_filt, 1))
+
+	x_filt[:, 1] = model.F * model.x0
+	P[:, :, 1] = model.F * P0 * model.F' + model.V
+	innovation =  y[:, 1] - model.G * x_filt[:, 1]
+	S = model.G * P[:, :, 1] * model.G' + model.W 	# Innovation covariance
+	K = P[:, :, 1] * model.G' * inv(S)				# Kalman gain
+	x_pred[:, 1] = x_filt[:, 1]
+	x_filt[:, 1] = x_filt[:, 1] + K * innovation
+	P[:, :, 1] = (I - K * model.G) * P[:, :, 1]
+
 	for i=2:n
 		# prediction
-		x_est[:, i] = model.F * x_est[:, i-1]
-		P1 = model.F * P0 * model.F' + model.V
-
-		innovation =  y[:, i] - model.G * x_est[:, i]
-		S = model.G * P1 * model.G' + model.W 	# Innovation covariance
-		K = P1 * model.G' * inv(S)				# Kalman gain
-		x_est[:, i] = x_est[:, i] + K * innovation
-		P0 = (I - K * model.G) * P1
+		x_filt[:, i] = model.F * x_filt[:, i-1]
+		P[:, :, i] = model.F * P[:, :, i-1] * model.F' + model.V
+		# update
+		innovation =  y[:, i] - model.G * x_filt[:, i]
+		S = model.G * P[:, :, i] * model.G' + model.W 	# Innovation covariance
+		K = P[:, :, i] * model.G' * inv(S)				# Kalman gain
+		x_pred[:, i] = x_filt[:, i]
+		x_filt[:, i] = x_filt[:, i] + K * innovation
+		P[:, :, i] = (I - K * model.G) * P[:, :, i]
 	end
-	return x_est'
+	return KalmanFiltered(x_filt', x_pred', P, model, y')
+end
+
+function kalman_smooth(y::Array, model::StateSpaceModel)
+	check_dimensions(model)
+	filt = kalman_filter(y, model)
+	n = size(y, 1)
+	x_filt = filt.filtered'
+	x_pred = filt.predicted'
+	x_smooth = zeros(size(x_filt))
+	P = filt.error_cov
+	P_smoov = zeros(size(P))
+	model = filt.model
+
+	P_pred = model.F * P[:, :, n-1] * model.F' + model.V
+	J = P[:, :, n] * model.F' * inv(P_pred)
+	x_smooth[:, n] = x_filt[:, n]
+	for i = (n-1):-1:1
+		J = P[:, :, i] * model.F' * inv(P_pred)
+		x_smooth[:, i] = x_filt[:, i] + J * (x_smooth[:, i+1] - x_pred[:, i+1])
+		P_smoov[:, :, i] = P[:, :, i] * J * (P_smoov[:, :, i+1] - P_pred) * J'
+	end
+	P_pred = model.F * model.P0 * model.F' + model.V
+	J = P[:, :, 1] * model.F' * inv(P_pred)
+	x_smooth[:, 1] = x_filt[:, 1] + J * (x_smooth[:, 2] - x_pred[:, 2])
+	P_smoov[:, :, 1] = P[:, :, 1] * J * (P_smoov[:, :, 2] - P_pred) * J'
+
+	return KalmanSmoothed(x_filt', x_pred', x_smooth, P_smoov[:,:,end], model, y)
 end
