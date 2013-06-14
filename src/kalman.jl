@@ -1,4 +1,3 @@
-using Optim
 using Rmath
 
 type StateSpaceModel{T}
@@ -19,6 +18,7 @@ type KalmanFiltered{T}
 	error_cov::Array{T}
 	model::StateSpaceModel
 	y::Array{T}
+	loglik::T
 end
 
 type KalmanSmoothed{T}
@@ -28,13 +28,14 @@ type KalmanSmoothed{T}
 	error_cov::Array{T}
 	model::StateSpaceModel
 	y::Array{T}
+	loglik::T
 end
 
 function issquare(x::Array)
 	return size(x, 1) == size(x, 2)
 end
 
-function simulate_statespace(n::Int, model::StateSpaceModel)
+function simulate_statespace{T}(n::Int, model::StateSpaceModel{T})
 	# Generates a realization of a state space model.
 	#
 	# Arguments:
@@ -78,7 +79,7 @@ function check_dimensions(model::StateSpaceModel)
 	@assert issquare(model.P0)
 end
 
-function kalman_filter(y::Array, model::StateSpaceModel)
+function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T})
 	check_dimensions(model)
 	n = size(y, 1)
 	y = y'
@@ -97,23 +98,29 @@ function kalman_filter(y::Array, model::StateSpaceModel)
 	x_pred[:, 1] = x_filt[:, 1]
 	x_filt[:, 1] = x_filt[:, 1] + K * innovation
 	P[:, :, 1] = (I - K * model.G) * P[:, :, 1]
-
+	log_likelihood = 0
 	for i=2:n
 		# prediction
 		x_filt[:, i] = model.F * x_filt[:, i-1]
 		P[:, :, i] = model.F * P[:, :, i-1] * model.F' + model.V
-		# update
+		# evaluate the likelihood
 		innovation =  y[:, i] - model.G * x_filt[:, i]
+		sigma = model.G * P[:, :, i] * model.G' + model.W
+		innovation =  y[:, i] - model.G * x_filt[:, i]
+		py = 1 / (sqrt(2pi) * det(sigma)^0.5) * exp(-0.5 * innovation' * sigma * innovation)
+		log_likelihood += log(py)
+		# update
 		S = model.G * P[:, :, i] * model.G' + model.W 	# Innovation covariance
 		K = P[:, :, i] * model.G' * inv(S)				# Kalman gain
 		x_pred[:, i] = x_filt[:, i]
 		x_filt[:, i] = x_filt[:, i] + K * innovation
 		P[:, :, i] = (I - K * model.G) * P[:, :, i]
+
 	end
-	return KalmanFiltered(x_filt', x_pred', P, model, y')
+	return KalmanFiltered(x_filt', x_pred', P, model, y', log_likelihood[1])
 end
 
-function kalman_smooth(y::Array, model::StateSpaceModel)
+function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T})
 	check_dimensions(model)
 	filt = kalman_filter(y, model)
 	n = size(y, 1)
@@ -137,5 +144,6 @@ function kalman_smooth(y::Array, model::StateSpaceModel)
 	x_smooth[:, 1] = x_filt[:, 1] + J * (x_smooth[:, 2] - x_pred[:, 2])
 	P_smoov[:, :, 1] = P[:, :, 1] * J * (P_smoov[:, :, 2] - P_pred) * J'
 
-	return KalmanSmoothed(x_filt', x_pred', x_smooth, P_smoov[:,:,end], model, y)
+	return KalmanSmoothed(x_filt', x_pred', x_smooth, P_smoov[:,:,end],
+		model, y, filt.loglik)
 end
