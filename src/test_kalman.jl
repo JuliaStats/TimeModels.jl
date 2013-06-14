@@ -47,6 +47,6 @@ add(p, Curve(t, smooth.smoothed, "color", "blue"))
 # add(p, Curve(t, x[:, 1], "color", "blue"))
 # add(p, Curve(t, filt.filtered[:, 1], "color", "green"))
 # add(p, Curve(t, smooth.smoothed[:, 1], "color", "red"))
-file(p, "series.png")
+Winston.display(p)
 
 println("\n\nPassed all tests.")
