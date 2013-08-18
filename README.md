@@ -30,6 +30,8 @@ Structure containing details of the GARCH fit with the fllowing fields:
 * status - status of the solver  
 * converged - boolean convergence status, true if constraints are satisfied  
 * sigma - conditional volatility  
+  
+  
 ### predict
 make volatility prediction  
 #### arguments:
