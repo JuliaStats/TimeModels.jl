@@ -1,8 +1,8 @@
-using DataFrames, Calendar, UTF16, TimeSeries
+using DataFrames, Datetime, TimeSeries  #, RMath, Winston
 
 module TimeModels
 
-using DataFrames, Calendar, UTF16, TimeSeries
+using DataFrames, Datetime, TimeSeries  #, RMath, Winston
 
 export acf, 
        arima, 
