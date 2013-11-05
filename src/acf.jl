@@ -6,7 +6,10 @@ acf = function(x::Array, n::Int)
   #plot with Winston
   y = linspace(0,n-1,n)
   x = acf_array
-  plot(y, x, "b^", y, x, "g:")
+  zp = 0.05(ones(n))
+  zn = -0.05(ones(n))
+
+  plot(y, x, "b^", y, zp, "r-", y, zn, "r-")
 
   return  acf_array
 end
