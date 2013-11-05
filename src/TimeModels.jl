@@ -1,8 +1,8 @@
-using DataFrames, Datetime, TimeSeries  #, RMath, Winston
+using DataFrames, Datetime, TimeSeries, Winston  #, RMath
 
 module TimeModels
 
-using DataFrames, Datetime, TimeSeries  #, RMath, Winston
+using DataFrames, Datetime, TimeSeries, Winston  #, RMath
 
 export acf, 
        arima, 
