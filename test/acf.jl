@@ -1,4 +1,4 @@
-d  = read_csv_for_testing(Pkg.dir("TimeSeries", "test", "data"), "spx.csv")
+d  = readtime(Pkg.dir("TimeModels/test/data/spx.csv"))
 e  = simple_return(d["Close"])
 
 acfd = acf(e, 10)
@@ -12,5 +12,3 @@ acfd = acf(e, 10)
 @assert -0.08783221241408777 == acfd[7]   # acf in R -0.08752100
 @assert -0.0265320834278675  == acfd[8]   # acf in R -0.02639833  
 @assert 0.10096389034532514  == acfd[9]   # acf in R 0.10043229
-
-

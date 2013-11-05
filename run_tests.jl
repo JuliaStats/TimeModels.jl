@@ -1,5 +1,4 @@
-require("test.jl")
-
+using Base.Test
 using TimeModels
 
 my_tests = ["test/arima.jl",
