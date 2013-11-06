@@ -2,6 +2,5 @@
 
 ##A Julia package for modeling time series. 
 
-* auto-correlation
-* arima
-* garch
+[Kalman Demo](https://www.github.com/JuliaStats/TimeModels/doc/png/kalman.png)
+[Experimental acf plot](https://www.github.com/JuliaStats/TimeModels/doc/png/acf_plot.png)
