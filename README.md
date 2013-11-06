@@ -2,5 +2,5 @@
 
 ##A Julia package for modeling time series. 
 
-[Kalman Demo](https://www.github.com/JuliaStats/TimeModels/doc/png/kalman.png)
-[Experimental acf plot](https://www.github.com/JuliaStats/TimeModels/doc/png/acf_plot.png)
+![Kalman Demo](https://raw.github.com/JuliaStats/TimeModels/doc/png/kalman.png)
+![Experimental acf plot](https://raw.github.com/JuliaStats/TimeModels/doc/png/acf_plot.png)
