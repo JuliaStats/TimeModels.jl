@@ -1,15 +1,11 @@
-using DataFrames, Datetime, TimeSeries, Winston  #, RMath
+using Stats, DataFrames, Datetime, TimeSeries, Winston 
 
 module TimeModels
 
-using DataFrames, Datetime, TimeSeries, Winston  #, RMath
+using Stats, DataFrames, Datetime, TimeSeries, Winston  
 
-export acf, 
-       arima, 
-       garch, 
-## testing
+export 
        @timemodels
-
 
 include("acf.jl")
 include("arima.jl")
