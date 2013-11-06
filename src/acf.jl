@@ -9,7 +9,7 @@ acf = function(x::Array, n::Int)
   zp = 0.05(ones(n))
   zn = -0.05(ones(n))
 
-  plot(y, x, "b^", y, zp, "r-", y, zn, "r-")
+#  plot(y, x, "b^", y, zp, "r-", y, zn, "r-") # causing travis build to fail
 
   return  acf_array
 end

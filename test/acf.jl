@@ -1,4 +1,4 @@
-d  = readtime(Pkg.dir("TimeModels/test/data/spx.csv"))
+d  = readtime(Pkg.dir("TimeModels/test/data/unittest.csv"))
 e  = simple_return(d["Close"])
 
 acfd = acf(e, 10)
