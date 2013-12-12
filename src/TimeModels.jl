@@ -9,7 +9,7 @@ export
 
 include("arima.jl")
 include("garch.jl")
-include("testtimemodels.jl")
+include("test/testmacro.jl")
 
 end 
 
