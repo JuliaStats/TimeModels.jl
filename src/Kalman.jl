@@ -1,16 +1,68 @@
-using Rmath
+module Kalman
+
+export
+	StateSpaceModel,
+	KalmanFiltered, 
+	KalmanSmoothed,
+	simulate,
+	kalman_filter,
+	kalman_smooth,
+	fit
+
+import Base.show
+using Optim
+
+# using Distributions
+
+issquare(x::Matrix) = size(x, 1) == size(x, 2) ? true : false
+
+function check_dimensions(F, V, G, W, x0, P0)
+	@assert length(x0) == size(F, 2)
+	@assert size(F) == size(V)
+	@assert issquare(F)
+	@assert size(G, 2) == size(F, 1)
+	@assert size(G, 1) == size(W, 1)
+	@assert issquare(W)
+	@assert size(P0, 1) == length(x0)
+	@assert issquare(P0)
+end
 
 type StateSpaceModel{T}
 	# Process transition and noise covariance
-	F::Array{T}
-	V::Array{T}
+	F::Matrix{T}
+	V::Matrix{T}
 	# Observation and noise covariance
-	G::Array{T}
-	W::Array{T}
+	G::Matrix{T}
+	W::Matrix{T}
 	# Inital guesses at state and error covariance
-	x0::Array{T}
-	P0::Array{T}
+	x0::Vector{T}
+	P0::Matrix{T}
+
+	function StateSpaceModel(F::Matrix{T}, V::Matrix{T}, G::Matrix{T}, W::Matrix{T},
+			x0::Vector{T}, P0::Matrix{T})
+		check_dimensions(F, V, G, W, x0, P0)
+		new(F, V, G, W, x0, P0)
+	end
 end
+
+function StateSpaceModel{T <: Real}(F::Matrix{T}, V::Matrix{T}, G::Matrix{T}, 
+		W::Matrix{T}, x0::Vector{T}, P0::Matrix{T})
+	StateSpaceModel{T}(F, V, G, W, x0, P0)
+end
+
+function show{T}(io::IO, mod::StateSpaceModel{T})
+	dx, dy = length(mod.x0), size(mod.G, 1)
+	println("StateSpaceModel{$T}, $dx-D process x $dy-D observations")
+	println("Process evolution matrix F:")
+	show(mod.F)
+	println("\n\nProcess error covariance V:")
+	show(mod.V)
+	println("\n\nObservation matrix G:")
+	show(mod.G)
+	println("\n\nObseration error covariance W:")
+	show(mod.W)
+end
+
 
 type KalmanFiltered{T}
 	filtered::Array{T}
@@ -19,6 +71,14 @@ type KalmanFiltered{T}
 	model::StateSpaceModel
 	y::Array{T}
 	loglik::T
+end
+
+function show{T}(io::IO, filt::KalmanFiltered{T})
+	n = size(filt.y, 1)
+	dx, dy = length(filt.model.x0), size(filt.model.G, 1)
+	println("KalmanFiltered{$T}")
+	println("$n observations, $dx-D process x $dy-D observations")
+	println("Negative log-likelihood: $(filt.loglik)")
 end
 
 type KalmanSmoothed{T}
@@ -31,20 +91,22 @@ type KalmanSmoothed{T}
 	loglik::T
 end
 
-function issquare(x::Array)
-	return size(x, 1) == size(x, 2)
+function show{T}(io::IO, filt::KalmanSmoothed{T})
+	n = size(filt.y, 1)
+	dx, dy = length(filt.model.x0), size(filt.model.G, 1)
+	println("KalmanSmoothed{$T}")
+	println("$n observations, $dx-D process x $dy-D observations")
+	println("Negative log-likelihood: $(filt.loglik)")
 end
 
-function simulate_statespace{T}(n::Int, model::StateSpaceModel{T})
+function simulate{T}(model::StateSpaceModel{T}, n::Int)
 	# Generates a realization of a state space model.
 	#
 	# Arguments:
-	# n : Int
-	#	Number of steps to simulate.
 	# model : StateSpaceModel
 	#	Model defining the process
-	# x0 : Array{float}.
-	#	Inital state vector.
+	# n : Int
+	#	Number of steps to simulate.
 
 	# dimensions of the process and observation series
 	nx = length(model.x0)
@@ -60,27 +122,17 @@ function simulate_statespace{T}(n::Int, model::StateSpaceModel{T})
 	W_chol = chol(model.W)'
 	# Generate the series
 	for i=2:n
-		x[:, i] = model.F * x[:, i-1] + V_chol * rnorm(nx)
-		y[:, i] = model.G * x[:, i] + W_chol * rnorm(ny)
+		x[:, i] = model.F * x[:, i-1] + V_chol * randn(nx)
+		y[:, i] = model.G * x[:, i] + W_chol * randn(ny)
 	end
 	return x', y'
 end
 
-function check_dimensions(model::StateSpaceModel)
-	@assert ndims(model.F) == ndims(model.G) == 2
-	@assert ndims(model.V) == ndims(model.W) == ndims(model.P0) == 2
-	@assert length(model.x0) == size(model.F, 2)
-	@assert size(model.F) == size(model.V)
-	@assert issquare(model.F)
-	@assert size(model.G, 2) == size(model.F, 1)
-	@assert size(model.G, 1) == size(model.W, 1)
-	@assert issquare(model.W)
-	@assert size(model.P0, 1) == length(model.x0)
-	@assert issquare(model.P0)
+function loglik{T}(innov::Array{T}, S::Array{T}) 
+	log(1) - 0.5log(2pi*det(S)) + 0.5log(det(S)) - 0.5*innov' * S * innov
 end
 
 function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T})
-	check_dimensions(model)
 	n = size(y, 1)
 	y = y'
 	x_filt = zeros(length(model.x0), n)
@@ -89,7 +141,7 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T})
 	P[:, :, 1] = model.P0
 	P0 = model.P0
 	I = eye(size(x_filt, 1))
-
+	# first iteration
 	x_filt[:, 1] = model.F * model.x0
 	P[:, :, 1] = model.F * P0 * model.F' + model.V
 	innovation =  y[:, 1] - model.G * x_filt[:, 1]
@@ -105,23 +157,18 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T})
 		P[:, :, i] = model.F * P[:, :, i-1] * model.F' + model.V
 		# evaluate the likelihood
 		innovation =  y[:, i] - model.G * x_filt[:, i]
-		sigma = model.G * P[:, :, i] * model.G' + model.W
-		innovation =  y[:, i] - model.G * x_filt[:, i]
-		py = 1 / (sqrt(2pi) * det(sigma)^0.5) * exp(-0.5 * innovation' * sigma * innovation)
-		log_likelihood += log(py)
-		# update
 		S = model.G * P[:, :, i] * model.G' + model.W 	# Innovation covariance
+		log_likelihood -= loglik(innovation, S)
+		# update
 		K = P[:, :, i] * model.G' * inv(S)				# Kalman gain
 		x_pred[:, i] = x_filt[:, i]
 		x_filt[:, i] = x_filt[:, i] + K * innovation
 		P[:, :, i] = (I - K * model.G) * P[:, :, i]
-
 	end
 	return KalmanFiltered(x_filt', x_pred', P, model, y', log_likelihood[1])
 end
 
 function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T})
-	check_dimensions(model)
 	filt = kalman_filter(y, model)
 	n = size(y, 1)
 	x_filt = filt.filtered'
@@ -147,3 +194,11 @@ function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T})
 	return KalmanSmoothed(x_filt', x_pred', x_smooth, P_smoov[:,:,end],
 		model, y, filt.loglik)
 end
+
+function fit{T}(y::Array{T}, build::Function, theta0::Vector{T})
+	objective(theta) = kalman_filter(y, build(theta)).loglik
+	fit = optimize(objective, theta0)
+	return (fit, build(fit))
+end
+
+end # module
