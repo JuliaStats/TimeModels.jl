@@ -1,9 +1,11 @@
 module Kalman
 
 export
+	# types
 	StateSpaceModel,
 	KalmanFiltered, 
 	KalmanSmoothed,
+	# methods
 	simulate,
 	kalman_filter,
 	kalman_smooth,

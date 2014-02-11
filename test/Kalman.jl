@@ -32,6 +32,9 @@ println("Smoothing")
 smooth = Kalman.kalman_smooth(y, mod1)
 @time smooth = Kalman.kalman_smooth(y, mod1)
 
+# Test model-fitting
+
+
 # println("Plotting")
 # p = FramedPlot()
 # for i=1:3

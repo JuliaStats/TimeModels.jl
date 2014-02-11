@@ -9,6 +9,7 @@ export
 
 include("arima.jl")
 include("garch.jl")
+include("Kalman.jl")
 include("../test/testmacro.jl")
 
 end 
