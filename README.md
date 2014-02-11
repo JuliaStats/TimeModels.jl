@@ -2,7 +2,10 @@
 
 ##A Julia package for modeling time series. 
 
-# Julia GARCH package
+![Kalman Demo](doc/png/kalman.png)
+![Experimental acf plot](doc/png/acf_plot.png)
+
+## GARCH model
 ***
 Generalized Autoregressive Conditional Heteroskedastic ([GARCH](http://en.wikipedia.org/wiki/Autoregressive_conditional_heteroskedasticity)) models for Julia.
 
@@ -55,9 +58,6 @@ one-step-ahead volatility forecast
     ret = diff(log(quotes["Close"]))
     ret = ret - mean(ret)
     garchFit(convert(Vector,ret[end-199:end]))
-    
-## Author
-Andrey Kolev
 
 ## References
 * T. Bollerslev (1986): Generalized Autoregressive Conditional Heteroscedasticity. Journal of Econometrics 31, 307–327.
