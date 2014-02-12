@@ -3,3 +3,5 @@ DataFrames
 Datetime
 TimeSeries
 Winston
+NLopt
+Distributions
