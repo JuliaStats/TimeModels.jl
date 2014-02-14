@@ -33,7 +33,19 @@ smooth = Kalman.kalman_smooth(y, mod1)
 @time smooth = Kalman.kalman_smooth(y, mod1)
 
 # Test model-fitting
+function build(theta)
+	F = diagm(theta[1])
+	V = diagm(exp(theta[2]))
+	G = reshape(theta[3:5], 3, 1)
+	W = diagm(exp(theta[6:8]))
+	x0 = [theta[9]]
+	P0 = diagm(1e7)
+	Kalman.StateSpaceModel(F, V, G, W, x0, P0)
+end
+theta0 = zeros(9)
+build(theta0)
 
+Kalman.fit(y, build, theta0)
 
 # println("Plotting")
 # p = FramedPlot()
