@@ -1,4 +1,3 @@
-using Base.Test
 using TimeModels
 
 println("Testing Kalman.jl")
@@ -18,7 +17,6 @@ println("Simulating series")
 x, y = simulate(mod1, 100)
 @time x, y = simulate(mod1, 100)
 t = [1:size(x, 1)]
-
 
 # Test filtering
 println("Filtering")

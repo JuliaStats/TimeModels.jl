@@ -2,7 +2,6 @@ module TimeModels
 
 using Distributions
 using StatsBase
-using DataFrames
 using Datetime
 using TimeSeries 
 using NLopt

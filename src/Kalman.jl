@@ -180,6 +180,6 @@ end
 
 function fit{T}(y::Array{T}, build::Function, theta0::Vector{T})
 	objective(theta) = kalman_filter(y, build(theta)).loglik
-	fit = optimize(objective, theta0)
-	return (fit, build(fit))
+	kfit = optimize(objective, theta0)
+	return (kfit.minimum, build(kfit.minimum))
 end
