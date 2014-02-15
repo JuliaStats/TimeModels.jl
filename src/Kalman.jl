@@ -1,21 +1,3 @@
-module Kalman
-
-export
-	# types
-	StateSpaceModel,
-	KalmanFiltered, 
-	KalmanSmoothed,
-	# methods
-	simulate,
-	kalman_filter,
-	kalman_smooth,
-	fit
-
-import Base.show
-using Optim
-
-# using Distributions
-
 issquare(x::Matrix) = size(x, 1) == size(x, 2) ? true : false
 
 function check_dimensions(F, V, G, W, x0, P0)
@@ -64,7 +46,6 @@ function show{T}(io::IO, mod::StateSpaceModel{T})
 	println("\n\nObseration error covariance W:")
 	show(mod.W)
 end
-
 
 type KalmanFiltered{T}
 	filtered::Array{T}
@@ -202,5 +183,3 @@ function fit{T}(y::Array{T}, build::Function, theta0::Vector{T})
 	fit = optimize(objective, theta0)
 	return (fit, build(fit))
 end
-
-end # module

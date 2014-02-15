@@ -1,9 +1,3 @@
-module arima
-
-export arima_statespace, arima
-
-using Kalman
-
 # Constructs a state-space representation of an ARIMA model given
 # vectors of AR and MA coefficients and a number of differences.
 # This implementation is based on Section 8.3 in Brockwell and Davis 2002,
@@ -41,7 +35,3 @@ function arima{T, I<:Integer}(y::Vector{T}, p::I, d::I, q::I)
 	par0 = zeros(p + d + q)
 	fit(y, build, par0)
 end
-
-
-end # module
-

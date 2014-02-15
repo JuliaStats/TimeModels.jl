@@ -2,14 +2,6 @@
 # Copyright 2013 Andrey Kolev
 # Distributed under MIT license (see LICENSE.md)
 
-module GARCH
-
-using NLopt, Distributions
-
-export garchFit, garchPkgTest, predict
-
-include("tests.jl")
-
 type GarchFit
   data::Vector
   params::Vector
@@ -118,14 +110,12 @@ function garchFit(data::Vector)
   out = GarchFit(data, minx, -0.5*(T-1)*log(2*pi)-0.5*minf, ret, converged, sqrt(ht),H,cvar,secoef,tval)
 end
 
-function garchPkgTest()
-  println("Running GARCH package test...")
-  try
-    include(Pkg.dir("GARCH", "test","GARCHtest.jl"))
-    println("All tests passed!")
-  catch err
-    throw(err)
-  end
-end
-
-end  #module
+# function garchPkgTest()
+#   println("Running GARCH package test...")
+#   try
+#     include(Pkg.dir("GARCH", "test","GARCHtest.jl"))
+#     println("All tests passed!")
+#   catch err
+#     throw(err)
+#   end
+# end

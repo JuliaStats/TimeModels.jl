@@ -1,15 +1,33 @@
-using StatsBase, DataFrames, Datetime, TimeSeries
-
 module TimeModels
 
-using StatsBase, DataFrames, Datetime, TimeSeries 
+using Distributions
+using StatsBase
+using DataFrames
+using Datetime
+using TimeSeries 
+using NLopt
+using Optim
 
-export 
-  @timemodels
+import Base.show
+
+export
+  # Kalman exports
+  StateSpaceModel,
+  KalmanFiltered, 
+  KalmanSmoothed,
+  simulate,
+  kalman_filter,
+  kalman_smooth,
+  fit, 
+  # ARIMA exports
+  arima_statespace,
+  arima,
+  # GARCH exports
+  garchFit,
+  predict
 
 include("Kalman.jl")
 include("ARIMA.jl")
 include("GARCH.jl")
-include("../test/testmacro.jl")
 
 end 
