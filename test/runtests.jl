@@ -1,9 +1,4 @@
-using Base.Test
-using TimeModels
-
-my_tests = ["arima.jl",
-            "garch.jl",
-            "Kalman.jl"]
+my_tests = ["Kalman.jl"]
 
 print_with_color(:cyan, "Running tests: ") 
 println("")

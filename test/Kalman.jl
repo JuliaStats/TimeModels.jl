@@ -1,7 +1,7 @@
+using Base.Test
+using TimeModels
 
 println("Testing Kalman.jl")
-include("../src/Kalman.jl")
-# include("./src/Kalman.jl")
 
 srand(1)
 
@@ -11,26 +11,26 @@ G = reshape([1, 2, -0.5], 3, 1)
 W = diagm([8.0, 2.5, 4.0])
 x0 = randn(1)
 P0 = diagm([1e7])
-mod1 = Kalman.StateSpaceModel(F, V, G, W, x0, P0)
+mod1 = StateSpaceModel(F, V, G, W, x0, P0)
 
 # Test simulating 
 println("Simulating series")
-x, y = Kalman.simulate(mod1, 100)
-@time x, y = Kalman.simulate(mod1, 100)
+x, y = simulate(mod1, 100)
+@time x, y = simulate(mod1, 100)
 t = [1:size(x, 1)]
 
 
 # Test filtering
 println("Filtering")
-filt = Kalman.kalman_filter(y, mod1)
-@time filt = Kalman.kalman_filter(y, mod1)
+filt = kalman_filter(y, mod1)
+@time filt = kalman_filter(y, mod1)
 println("Log likelihood:")
 println(filt.loglik)
 
 # Test smoothing
 println("Smoothing")
 smooth = Kalman.kalman_smooth(y, mod1)
-@time smooth = Kalman.kalman_smooth(y, mod1)
+@time smooth = kalman_smooth(y, mod1)
 
 # Test model-fitting
 function build(theta)
@@ -45,7 +45,7 @@ end
 theta0 = zeros(9)
 build(theta0)
 
-Kalman.fit(y, build, theta0)
+fit(y, build, theta0)
 
 # println("Plotting")
 # p = FramedPlot()
@@ -59,4 +59,4 @@ Kalman.fit(y, build, theta0)
 # # add(p, Curve(t, smooth.smoothed[:, 1], "color", "red"))
 # Winston.display(p)
 
-println("\n\nPassed all tests.")
+println("\n\nPassed Kalman tests.")
