@@ -1,16 +1,15 @@
-using Stats, DataFrames, Datetime, TimeSeries, Winston 
+using StatsBase, DataFrames, Datetime, TimeSeries
 
 module TimeModels
 
-using Stats, DataFrames, Datetime, TimeSeries, Winston  
+using StatsBase, DataFrames, Datetime, TimeSeries 
 
 export 
-       @timemodels
+  @timemodels
 
-include("arima.jl")
-include("garch.jl")
 include("Kalman.jl")
+include("ARIMA.jl")
+include("GARCH.jl")
 include("../test/testmacro.jl")
 
 end 
-

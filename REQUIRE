@@ -1,7 +1,8 @@
-Stats
+julia 0.3-
+Distributions
+StatsBase
 DataFrames
 Datetime
 TimeSeries
-Winston
 NLopt
-Distributions
+Optim
