@@ -29,7 +29,7 @@ println(filt.loglik)
 
 # Test smoothing
 println("Smoothing")
-smooth = Kalman.kalman_smooth(y, mod1)
+smooth = kalman_smooth(y, mod1)
 @time smooth = kalman_smooth(y, mod1)
 
 # Test model-fitting
@@ -40,7 +40,7 @@ function build(theta)
 	W = diagm(exp(theta[6:8]))
 	x0 = [theta[9]]
 	P0 = diagm(1e7)
-	Kalman.StateSpaceModel(F, V, G, W, x0, P0)
+	StateSpaceModel(F, V, G, W, x0, P0)
 end
 theta0 = zeros(9)
 build(theta0)
