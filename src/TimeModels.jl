@@ -23,10 +23,13 @@ export
   arima,
   # GARCH exports
   garchFit,
-  predict
+  predict,
+  # diagnostic tests exports
+  jbtest
 
 include("Kalman.jl")
 include("ARIMA.jl")
 include("GARCH.jl")
+include("diagnostic_tests.jl")
 
 end 

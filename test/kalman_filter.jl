@@ -1,6 +1,6 @@
 using MarketData
 
-facts("garch builds models") do
+facts("kalman builds models") do
 
   context("works when it supposed to") do
       @fact length(cl.values) => 500
