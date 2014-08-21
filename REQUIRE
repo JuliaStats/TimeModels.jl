@@ -1,7 +1,7 @@
 julia 0.3-
 Distributions
 StatsBase
-Datetime
+Dates
 TimeSeries
 NLopt
 Optim
