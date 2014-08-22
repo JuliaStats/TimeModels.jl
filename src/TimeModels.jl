@@ -2,7 +2,7 @@ module TimeModels
 
 using Distributions
 using StatsBase
-using Datetime
+using Dates
 using TimeSeries 
 using NLopt
 using Optim
