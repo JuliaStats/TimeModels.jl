@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.org/JuliaStats/TimeModels.jl.png)](https://travis-ci.org/JuliaStats/TimeModels.jl)
-[![Package Evaluator](http://iainnz.github.io/packages.julialang.org/badges/TimeModels_0.3.svg)](http://iainnz.github.io/packages.julialang.org/?pkg=TimeModels&ver=0.3)
+[![TimeModels](http://pkg.julialang.org/badges/TimeModels_release.svg)](http://pkg.julialang.org/?pkg=TimeModels&ver=release)
 
 ##A Julia package for modeling time series. 
 
