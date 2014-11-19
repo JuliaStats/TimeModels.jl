@@ -13,23 +13,23 @@ end
 
 type StateSpaceModel{T}
 	# Process transition and noise covariance
-	F::Matrix{T}
+	F::Union(Matrix{T}, Matrix{Function})
 	V::Matrix{T}
 	# Observation and noise covariance
-	G::Matrix{T}
+	G::Union(Matrix{T}, Matrix{Function})
 	W::Matrix{T}
 	# Inital guesses at state and error covariance
 	x0::Vector{T}
 	P0::Matrix{T}
 
-	function StateSpaceModel(F::Matrix{T}, V::Matrix{T}, G::Matrix{T}, W::Matrix{T},
-			x0::Vector{T}, P0::Matrix{T})
+	function StateSpaceModel(F::Union(Matrix{T}, Matrix{Function}), V::Matrix{T},
+	                G::Union(Matrix{T}, Matrix{Function}), W::Matrix{T}, x0::Vector{T}, P0::Matrix{T})
 		check_dimensions(F, V, G, W, x0, P0)
 		new(F, V, G, W, x0, P0)
 	end
 end
 
-function StateSpaceModel{T <: Real}(F::Matrix{T}, V::Matrix{T}, G::Matrix{T}, 
+function StateSpaceModel{T <: Real}(F::Union(Matrix{T}, Matrix{Function}), V::Matrix{T}, G::Union(Matrix{T}, Matrix{Function}),
 		W::Matrix{T}, x0::Vector{T}, P0::Matrix{T})
 	StateSpaceModel{T}(F, V, G, W, x0, P0)
 end
@@ -82,6 +82,13 @@ function show{T}(io::IO, filt::KalmanSmoothed{T})
 	println("Negative log-likelihood: $(filt.loglik)")
 end
 
+function eval_matrix(M::Matrix{Function}, i::Int, ArrayType::Type)
+    reshape(convert(Array{ArrayType}, [m(i) for m in M]), size(M))
+end
+function eval_matrix{T <: Real}(M::Matrix{T}, n::Int, ArrayType::Type)
+    M
+end
+
 function simulate{T}(model::StateSpaceModel{T}, n::Int)
 	# Generates a realization of a state space model.
 	#
@@ -98,20 +105,20 @@ function simulate{T}(model::StateSpaceModel{T}, n::Int)
 	x = zeros(nx, n)
 	x[:, 1] = model.x0
 	y = zeros(ny, n)
-	y[:, 1] = model.G * x[:, 1]
+        y[:, 1] = eval_matrix(model.G, 1, T) * x[:, 1]
 	# Cholesky decompositions of the covariance matrices, for generating
 	# random noise
 	V_chol = chol(model.V)'
 	W_chol = chol(model.W)'
 	# Generate the series
-	for i=2:n
-		x[:, i] = model.F * x[:, i-1] + V_chol * randn(nx)
-		y[:, i] = model.G * x[:, i] + W_chol * randn(ny)
-	end
+        for i=2:n
+            x[:, i] = eval_matrix(model.F, i, T) * x[:, i-1] + V_chol * randn(nx)
+            y[:, i] = eval_matrix(model.G, i, T) * x[:, i] + W_chol * randn(ny)
+        end
 	return x', y'
 end
 
-function loglik{T}(innov::Array{T}, S::Array{T}) 
+function loglik{T}(innov::Array{T}, S::Array{T})
 	log(1) - 0.5log(2pi*det(S)) + 0.5log(det(S)) - 0.5*innov' * S * innov
 end
 
@@ -125,31 +132,32 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T})
 	P0 = model.P0
 	I = eye(size(x_filt, 1))
 	# first iteration
-	x_filt[:, 1] = model.F * model.x0
-	P[:, :, 1] = model.F * P0 * model.F' + model.V
-	innovation =  y[:, 1] - model.G * x_filt[:, 1]
-	S = model.G * P[:, :, 1] * model.G' + model.W 	# Innovation covariance
-	K = P[:, :, 1] * model.G' * inv(S)				# Kalman gain
+	x_filt[:, 1] = eval_matrix(model.F, 1, T) * model.x0
+	P[:, :, 1] = eval_matrix(model.F, 1, T) * P0 * eval_matrix(model.F, 1, T)' + model.V
+	innovation =  y[:, 1] - eval_matrix(model.G, 1, T) * x_filt[:, 1]
+	S = eval_matrix(model.G, 1, T) * P[:, :, 1] * eval_matrix(model.G, 1, T)' + model.W   # Innovation covariance
+	K = P[:, :, 1] * eval_matrix(model.G, 1, T)' * inv(S)				      # Kalman gain
 	x_pred[:, 1] = x_filt[:, 1]
 	x_filt[:, 1] = x_filt[:, 1] + K * innovation
-	P[:, :, 1] = (I - K * model.G) * P[:, :, 1]
+	P[:, :, 1] = (I - K * eval_matrix(model.G, 1, T)) * P[:, :, 1]
 	log_likelihood = 0
 	for i=2:n
 		# prediction
-		x_filt[:, i] = model.F * x_filt[:, i-1]
-		P[:, :, i] = model.F * P[:, :, i-1] * model.F' + model.V
+		x_filt[:, i] = eval_matrix(model.F, i, T) * x_filt[:, i-1]
+		P[:, :, i] = eval_matrix(model.F, i, T) * P[:, :, i-1] * eval_matrix(model.F, i, T)' + model.V
 		# evaluate the likelihood
-		innovation =  y[:, i] - model.G * x_filt[:, i]
-		S = model.G * P[:, :, i] * model.G' + model.W 	# Innovation covariance
+		innovation =  y[:, i] - eval_matrix(model.G, i, T) * x_filt[:, i]
+		S = eval_matrix(model.G, i, T) * P[:, :, i] * eval_matrix(model.G, i, T)' + model.W  # Innovation covariance
 		log_likelihood -= loglik(innovation, S)
 		# update
-		K = P[:, :, i] * model.G' * inv(S)				# Kalman gain
+		K = P[:, :, i] * eval_matrix(model.G, i, T)' * inv(S)				     # Kalman gain
 		x_pred[:, i] = x_filt[:, i]
 		x_filt[:, i] = x_filt[:, i] + K * innovation
-		P[:, :, i] = (I - K * model.G) * P[:, :, i]
+		P[:, :, i] = (I - K * eval_matrix(model.G, i, T)) * P[:, :, i]
 	end
 	return KalmanFiltered(x_filt', x_pred', P, model, y', log_likelihood[1])
 end
+
 
 function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T})
 	filt = kalman_filter(y, model)
@@ -161,16 +169,16 @@ function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T})
 	P_smoov = zeros(size(P))
 	model = filt.model
 
-	P_pred = model.F * P[:, :, n-1] * model.F' + model.V
-	J = P[:, :, n] * model.F' * inv(P_pred)
+	P_pred = eval_matrix(model.F, n, T) * P[:, :, n-1] * eval_matrix(model.F, n, T)' + model.V
+	J = P[:, :, n] * eval_matrix(model.F, n, T)' * inv(P_pred)
 	x_smooth[:, n] = x_filt[:, n]
 	for i = (n-1):-1:1
-		J = P[:, :, i] * model.F' * inv(P_pred)
+		J = P[:, :, i] * eval_matrix(model.F, i, T)' * inv(P_pred)
 		x_smooth[:, i] = x_filt[:, i] + J * (x_smooth[:, i+1] - x_pred[:, i+1])
 		P_smoov[:, :, i] = P[:, :, i] * J * (P_smoov[:, :, i+1] - P_pred) * J'
 	end
-	P_pred = model.F * model.P0 * model.F' + model.V
-	J = P[:, :, 1] * model.F' * inv(P_pred)
+	P_pred = eval_matrix(model.F, 1, T) * model.P0 * eval_matrix(model.F, 1, T)' + model.V
+	J = P[:, :, 1] * eval_matrix(model.F, 1, T)' * inv(P_pred)
 	x_smooth[:, 1] = x_filt[:, 1] + J * (x_smooth[:, 2] - x_pred[:, 2])
 	P_smoov[:, :, 1] = P[:, :, 1] * J * (P_smoov[:, :, 2] - P_pred) * J'
 
