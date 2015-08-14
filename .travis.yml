@@ -1,20 +1,13 @@
-language: cpp
-compiler: 
-  - clang
+language: julia
+os:
+  - linux
+  - osx
+julia:
+  - release
+  - nightly
 notifications:
   email: false
-env:
-  matrix: 
-    # - JULIAVERSION="juliareleases" 
-  - JULIAVERSION="julianightlies" 
-before_install:
-  - sudo add-apt-repository ppa:staticfloat/julia-deps -y
-  - sudo add-apt-repository ppa:staticfloat/${JULIAVERSION} -y
-  - sudo apt-get update -qq -y
-  - sudo apt-get install libpcre3-dev julia -y
 script:
-  - julia -e 'versioninfo(); Pkg.init();'
-  - julia -e 'Pkg.clone("git://github.com/JuliaStats/TimeModels.jl"); Pkg.add("FactCheck"); Pkg.add("MarketData");'
-  - mkdir -p ~/.julia/TimeModels
-  - cp -R ./* ~/.julia/TimeModels/
-  - julia ./test/runtests.jl
+  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+  - julia -e 'Pkg.add("FactCheck"); Pkg.add("MarketData");'
+  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("TimeModels"); Pkg.test("TimeModels"; coverage=true)'
