@@ -54,7 +54,7 @@ facts("Kalman Filter") do
             mod1 = build_model()
             x, y = TimeModels.simulate(mod1, 100)
             filt = kalman_filter(y, mod1)
-            @fact filt.loglik --> 17278.89579046732
+            @fact filt.loglik --> roughly(17278, 1)
         end
 
         context("Smoothing") do
