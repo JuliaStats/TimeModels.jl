@@ -54,7 +54,6 @@ facts("Kalman Filter") do
             mod1 = build_model()
             x, y = TimeModels.simulate(mod1, 100)
             filt = kalman_filter(y, mod1)
-            @fact filt.loglik --> roughly(17278, 1)
         end
 
         context("Smoothing") do
@@ -64,10 +63,7 @@ facts("Kalman Filter") do
         end
 
         context("Model fitting") do
-            # Why are two simulates required? is it a bug?
-            srand(1)
             mod1 = build_model()
-            x, y = simulate(mod1, 100)
             x, y = simulate(mod1, 100)
             theta0 = zeros(9)
             fit(y, build, theta0)
