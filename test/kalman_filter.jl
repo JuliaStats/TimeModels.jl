@@ -70,6 +70,7 @@ facts("Kalman Filter") do
         end
     end
 
+
     context("Time varying models") do
 
         context("Building Model") do
@@ -104,6 +105,7 @@ facts("Kalman Filter") do
                 mod3 = sinusoid_model(4, fs = 256, x0=[1.7, -0.2])
                 filt = kalman_filter(y, mod3)
                 @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
+
             end
 
             context("Model error") do
@@ -113,6 +115,20 @@ facts("Kalman Filter") do
             end
 
         end
+
+        context("Smoothing") do
+            srand(1)
+            fs = 256
+            mod2 = sinusoid_model(4, fs = 8192)
+            x, y = TimeModels.simulate(mod2, fs*10)
+            smooth = kalman_smooth(y, sinusoid_model(4, fs = 8192, x0=[1.7, -0.2]) )
+            @fact mean(smooth.smoothed, 1) --> roughly([0.5 -0.5]; atol= 0.1)
+
+            #= x_est = round(smooth.smoothed[end, :], 3) =#
+            #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 1]), width = 120, title="Smoothed State 1: $(x_est[1])")) =#
+            #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 2]), width = 120, title="Smoothed State 2: $(x_est[2])")) =#
+        end
+
 
     end
 

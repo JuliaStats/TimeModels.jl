@@ -169,18 +169,13 @@ function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T})
 	P_smoov = zeros(size(P))
 	model = filt.model
 
-	P_pred = eval_matrix(model.F, n, T) * P[:, :, n-1] * eval_matrix(model.F, n, T)' + model.V
-	J = P[:, :, n] * eval_matrix(model.F, n, T)' * inv(P_pred)
 	x_smooth[:, n] = x_filt[:, n]
 	for i = (n-1):-1:1
+                P_pred = eval_matrix(model.F, i, T) * P[:, :, i] * eval_matrix(model.F, i, T)' + model.V
 		J = P[:, :, i] * eval_matrix(model.F, i, T)' * inv(P_pred)
 		x_smooth[:, i] = x_filt[:, i] + J * (x_smooth[:, i+1] - x_pred[:, i+1])
 		P_smoov[:, :, i] = P[:, :, i] * J * (P_smoov[:, :, i+1] - P_pred) * J'
 	end
-	P_pred = eval_matrix(model.F, 1, T) * model.P0 * eval_matrix(model.F, 1, T)' + model.V
-	J = P[:, :, 1] * eval_matrix(model.F, 1, T)' * inv(P_pred)
-	x_smooth[:, 1] = x_filt[:, 1] + J * (x_smooth[:, 2] - x_pred[:, 2])
-	P_smoov[:, :, 1] = P[:, :, 1] * J * (P_smoov[:, :, 2] - P_pred) * J'
 
 	return KalmanSmoothed(x_filt', x_pred', x_smooth', P_smoov[:,:,end],
 		model, y, filt.loglik)
