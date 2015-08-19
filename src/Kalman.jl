@@ -182,7 +182,7 @@ function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T})
 	x_smooth[:, 1] = x_filt[:, 1] + J * (x_smooth[:, 2] - x_pred[:, 2])
 	P_smoov[:, :, 1] = P[:, :, 1] * J * (P_smoov[:, :, 2] - P_pred) * J'
 
-	return KalmanSmoothed(x_filt', x_pred', x_smooth, P_smoov[:,:,end],
+	return KalmanSmoothed(x_filt', x_pred', x_smooth', P_smoov[:,:,end],
 		model, y, filt.loglik)
 end
 
