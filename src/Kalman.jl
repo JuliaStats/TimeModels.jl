@@ -131,20 +131,27 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T})
 	P[:, :, 1] = model.P0
 	P0 = model.P0
 	I = eye(size(x_filt, 1))
+
 	# first iteration
-	x_filt[:, 1] = eval_matrix(model.F, 1, T) * model.x0
-	P[:, :, 1] = eval_matrix(model.F, 1, T) * P0 * eval_matrix(model.F, 1, T)' + model.V
-	innovation =  y[:, 1] - eval_matrix(model.G, 1, T) * x_filt[:, 1]
-	S = eval_matrix(model.G, 1, T) * P[:, :, 1] * eval_matrix(model.G, 1, T)' + model.W   # Innovation covariance
-	K = P[:, :, 1] * eval_matrix(model.G, 1, T)' * inv(S)				      # Kalman gain
-	x_pred[:, 1] = x_filt[:, 1]
-	x_filt[:, 1] = x_filt[:, 1] + K * innovation
-	P[:, :, 1] = (I - K * eval_matrix(model.G, 1, T)) * P[:, :, 1]
+        x_filt[:, 1] = eval_matrix(model.F, 1, T) * model.x0
+        P[:, :, 1] = eval_matrix(model.F, 1, T) * P0 * eval_matrix(model.F, 1, T)' + model.V
+        if !any(isnan(y[:, 1]))
+            innovation =  y[:, 1] - eval_matrix(model.G, 1, T) * x_filt[:, 1]
+            S = eval_matrix(model.G, 1, T) * P[:, :, 1] * eval_matrix(model.G, 1, T)' + model.W   # Innovation covariance
+            K = P[:, :, 1] * eval_matrix(model.G, 1, T)' * inv(S)				      # Kalman gain
+            x_pred[:, 1] = x_filt[:, 1]
+            x_filt[:, 1] = x_filt[:, 1] + K * innovation
+            P[:, :, 1] = (I - K * eval_matrix(model.G, 1, T)) * P[:, :, 1]
+        else
+            x_pred[:, 1] = x_filt[:, 1]
+        end
 	log_likelihood = 0
+
 	for i=2:n
-		# prediction
-		x_filt[:, i] = eval_matrix(model.F, i, T) * x_filt[:, i-1]
-		P[:, :, i] = eval_matrix(model.F, i, T) * P[:, :, i-1] * eval_matrix(model.F, i, T)' + model.V
+            # prediction
+            x_filt[:, i] = eval_matrix(model.F, i, T) * x_filt[:, i-1]
+            P[:, :, i] = eval_matrix(model.F, i, T) * P[:, :, i-1] * eval_matrix(model.F, i, T)' + model.V
+            if !any(isnan(y[:, i]))
 		# evaluate the likelihood
 		innovation =  y[:, i] - eval_matrix(model.G, i, T) * x_filt[:, i]
 		S = eval_matrix(model.G, i, T) * P[:, :, i] * eval_matrix(model.G, i, T)' + model.W  # Innovation covariance
@@ -154,6 +161,9 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T})
 		x_pred[:, i] = x_filt[:, i]
 		x_filt[:, i] = x_filt[:, i] + K * innovation
 		P[:, :, i] = (I - K * eval_matrix(model.G, i, T)) * P[:, :, i]
+            else
+                x_pred[:, i] = x_filt[:, i]
+            end
 	end
 	return KalmanFiltered(x_filt', x_pred', P, model, y', log_likelihood[1])
 end
@@ -169,20 +179,16 @@ function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T})
 	P_smoov = zeros(size(P))
 	model = filt.model
 
-	P_pred = eval_matrix(model.F, n, T) * P[:, :, n-1] * eval_matrix(model.F, n, T)' + model.V
-	J = P[:, :, n] * eval_matrix(model.F, n, T)' * inv(P_pred)
 	x_smooth[:, n] = x_filt[:, n]
+	P_smoov[:, :, n] = P[:, :, n]
 	for i = (n-1):-1:1
+                P_pred = eval_matrix(model.F, i, T) * P[:, :, i] * eval_matrix(model.F, i, T)' + model.V
 		J = P[:, :, i] * eval_matrix(model.F, i, T)' * inv(P_pred)
 		x_smooth[:, i] = x_filt[:, i] + J * (x_smooth[:, i+1] - x_pred[:, i+1])
-		P_smoov[:, :, i] = P[:, :, i] * J * (P_smoov[:, :, i+1] - P_pred) * J'
+		P_smoov[:, :, i] = P[:, :, i] + J * (P_smoov[:, :, i+1] - P_pred) * J'
 	end
-	P_pred = eval_matrix(model.F, 1, T) * model.P0 * eval_matrix(model.F, 1, T)' + model.V
-	J = P[:, :, 1] * eval_matrix(model.F, 1, T)' * inv(P_pred)
-	x_smooth[:, 1] = x_filt[:, 1] + J * (x_smooth[:, 2] - x_pred[:, 2])
-	P_smoov[:, :, 1] = P[:, :, 1] * J * (P_smoov[:, :, 2] - P_pred) * J'
 
-	return KalmanSmoothed(x_filt', x_pred', x_smooth, P_smoov[:,:,end],
+	return KalmanSmoothed(x_filt', x_pred', x_smooth', P_smoov,
 		model, y, filt.loglik)
 end
 
