@@ -68,6 +68,18 @@ facts("Kalman Filter") do
             theta0 = zeros(9)
             fit(y, build, theta0)
         end
+
+        context("Return sizes") do
+            mod1 = build_model()
+            x, y = TimeModels.simulate(mod1, 100)
+            filt = kalman_filter(y, mod1)
+            smooth = kalman_smooth(y, mod1)
+
+            @fact size(filt.filtered) --> size(filt.predicted)
+            @fact size(filt.filtered) --> size(smooth.filtered)
+            @fact size(filt.filtered) --> size(smooth.smoothed)
+            @fact size(filt.error_cov) --> size(smooth.error_cov)
+        end
     end
 
 
