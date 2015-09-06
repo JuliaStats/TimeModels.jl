@@ -69,6 +69,17 @@ facts("Kalman Filter") do
             fit(y, build, theta0)
         end
 
+        context("Missing data") do
+            mod1 = build_model()
+            x, y = simulate(mod1, 100)
+            y[1:9:end] = NaN
+            y[100] = NaN
+            filt = kalman_filter(y, mod1)
+            smooth = kalman_smooth(y, mod1)
+            @fact any(isnan(filt.filtered)) --> false
+            @fact any(isnan(smooth.filtered)) --> false
+        end
+
         context("Return sizes") do
             mod1 = build_model()
             x, y = TimeModels.simulate(mod1, 100)
