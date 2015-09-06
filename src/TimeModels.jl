@@ -1,11 +1,17 @@
 module TimeModels
 
+if VERSION < v"0.4-"
+  using Dates
+else
+  using Base.Dates
+end
+
 using Distributions
 using StatsBase
-using Dates
 using TimeSeries 
 using NLopt
 using Optim
+using Compat
 
 import Base.show
 

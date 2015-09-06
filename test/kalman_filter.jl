@@ -65,8 +65,7 @@ facts("Kalman Filter") do
         context("Model fitting") do
             mod1 = build_model()
             x, y = simulate(mod1, 100)
-            theta0 = zeros(9)
-            fit(y, build, theta0)
+            fit(y, build, zeros(9))
         end
 
         context("Missing data") do
@@ -154,6 +153,19 @@ facts("Kalman Filter") do
 
 
     end
+
+    context("Linear regression test") do
+      m, b, s, dt = 5, 2, 2, .1
+      t = 0:dt:10
+      y_true = m*t + b
+      y_noisy = y_true + s*randn(length(t))
+      lm = StateSpaceModel([1 dt; 0 1], zeros(2,2), [1. 0], s*eye(1), zeros(2), 100*eye(2))
+      lm_filt = kalman_filter(y_noisy, lm)
+      @fact lm_filt.filtered[end,1] --> roughly(y_true[end], atol=4*sqrt(lm_filt.error_cov[1,1,end]))
+      lm_smooth = kalman_smooth(y_noisy, lm)
+      @fact all((y_true - lm_smooth.smoothed[:,1]) .< 4*sqrt(lm_smooth.error_cov[1,1,:][:])) --> true
+    end
+
 
     context("Correct failure") do
     end
