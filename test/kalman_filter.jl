@@ -23,14 +23,14 @@ function build(theta)
 end
 
 # Time varying model
-function sinusoid_model(omega::Real; fs::Int=256, x0=[0.5, -0.5], W::FloatingPoint=0.1)
-    F  = [1.0 0; 0 1.0]
-    V  = diagm([1e-10, 1e-10])
+function sinusoid_model(omega::Real; fs::Int=256, x0=[0.5, -0.5, -10], W::FloatingPoint=0.1)
+    F  = [1.0 0 0; 0 1.0 0; 0 0 1]
+    V  = diagm([1e-10, 1e-10, 1e-10])
     function G1(n);  cos(2*pi*omega*(1/fs)*n); end
     function G2(n); -sin(2*pi*omega*(1/fs)*n); end
-    G = reshape([G1, G2], 1, 2)
+    G = reshape([G1, G2, 1], 1, 3)
     W = diagm([W])
-    P0 = diagm([1e-1, 1e-1])
+    P0 = diagm([1e-1, 1e-1, 1e-1])
     StateSpaceModel(F, V, G, W, x0, P0)
 end
 
@@ -112,11 +112,11 @@ facts("Kalman Filter") do
             srand(1)
             fs = 256
             mod2 = sinusoid_model(4, fs = 256)
-            x, y = TimeModels.simulate(mod2, fs*2)
+            x, y = TimeModels.simulate(mod2, fs*50)
 
             context("Correct initial guess") do
                 filt = kalman_filter(y, mod2)
-                @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
+                @fact filt.predicted[end, :] --> roughly([0.5 -0.5 -10]; atol= 0.3)
 
                 #= x_est = round(filt.predicted[end, :], 3) =#
                 #= display(lineplot(collect(1:size(x, 1)) / fs, vec(filt.predicted[:, 1]), width = 120, title="Filtered State 1: $(x_est[1])")) =#
@@ -124,16 +124,16 @@ facts("Kalman Filter") do
             end
 
             context("Incorrect initial guess") do
-                mod3 = sinusoid_model(4, fs = 256, x0=[1.7, -0.2])
+                mod3 = sinusoid_model(4, fs = 256, x0=[0.7, -0.3, -10])
                 filt = kalman_filter(y, mod3)
-                @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
+                @fact filt.predicted[end, :] --> roughly([0.5 -0.5 -10]; atol= 0.3)
 
             end
 
             context("Model error") do
-                mod4 = sinusoid_model(4, fs = 256, x0=[1.7, -0.2], W=3.0)
+                mod4 = sinusoid_model(4, fs = 256, x0=[0.7, -0.3, -10], W=3.0)
                 filt = kalman_filter(y, mod4)
-                @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
+                @fact filt.predicted[end, :] --> roughly([0.5 -0.5 -10]; atol= 0.3)
             end
 
         end
@@ -143,8 +143,8 @@ facts("Kalman Filter") do
             fs = 256
             mod2 = sinusoid_model(4, fs = 8192)
             x, y = TimeModels.simulate(mod2, fs*10)
-            smooth = kalman_smooth(y, sinusoid_model(4, fs = 8192, x0=[1.7, -0.2]) )
-            @fact mean(smooth.smoothed, 1) --> roughly([0.5 -0.5]; atol= 0.1)
+            smooth = kalman_smooth(y, sinusoid_model(4, fs = 8192, x0=[0.7, -0.3, -10]) )
+            @fact mean(smooth.smoothed, 1) --> roughly([0.5 -0.5 -10]; atol= 0.3)
 
             #= x_est = round(smooth.smoothed[end, :], 3) =#
             #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 1]), width = 120, title="Smoothed State 1: $(x_est[1])")) =#
