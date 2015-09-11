@@ -112,7 +112,7 @@ facts("Kalman Filter") do
             srand(1)
             fs = 256
             mod2 = sinusoid_model(4, fs = 256)
-            x, y = TimeModels.simulate(mod2, fs*50)
+            x, y = TimeModels.simulate(mod2, fs*10)
 
             context("Correct initial guess") do
                 filt = kalman_filter(y, mod2)
@@ -124,14 +124,13 @@ facts("Kalman Filter") do
             end
 
             context("Incorrect initial guess") do
-                mod3 = sinusoid_model(4, fs = 256, x0=[0.7, -0.3, -10])
+                mod3 = sinusoid_model(4, fs = 256, x0=[1.7, -0.2, -10])
                 filt = kalman_filter(y, mod3)
                 @fact filt.predicted[end, :] --> roughly([0.5 -0.5 -10]; atol= 0.3)
-
             end
 
             context("Model error") do
-                mod4 = sinusoid_model(4, fs = 256, x0=[0.7, -0.3, -10], W=3.0)
+                mod4 = sinusoid_model(4, fs = 256, x0=[1.7, -0.2, -10], W=3.0)
                 filt = kalman_filter(y, mod4)
                 @fact filt.predicted[end, :] --> roughly([0.5 -0.5 -10]; atol= 0.3)
             end
@@ -150,7 +149,6 @@ facts("Kalman Filter") do
             #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 1]), width = 120, title="Smoothed State 1: $(x_est[1])")) =#
             #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 2]), width = 120, title="Smoothed State 2: $(x_est[2])")) =#
         end
-
 
     end
 
