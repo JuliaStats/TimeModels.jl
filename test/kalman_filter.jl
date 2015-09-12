@@ -65,7 +65,8 @@ facts("Kalman Filter") do
         context("Model fitting") do
             mod1 = build_model()
             x, y = simulate(mod1, 100)
-            fit(y, build, zeros(9))
+            show(@time fit(y, build, zeros(9)))
+            show(@time fit(y, build(randn(9))))
         end
 
         context("Missing data") do
