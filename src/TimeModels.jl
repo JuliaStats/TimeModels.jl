@@ -8,6 +8,7 @@ end
 
 using Distributions
 using StatsBase
+using MultivariateStats
 using TimeSeries 
 using NLopt
 using Optim
@@ -40,6 +41,8 @@ export
     # ARIMA exports
     arima_statespace,
     arima,
+    ar,
+    arx,
 
     # GARCH exports
     garchFit,

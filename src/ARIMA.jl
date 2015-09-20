@@ -33,5 +33,77 @@ end
 function arima{T, I<:Integer}(y::Vector{T}, p::I, d::I, q::I)
 	build(par::Vector{T}) = arima_statespace(par[1:p], par[p+1], par[p+2:end])
 	par0 = zeros(p + d + q)
-	fit(y, build, par0)
+	fit(y'', build, par0)
 end
+
+function ar{T}(y::Vector{T}, p::Int; niter::Int=1000, eps::Float64=1e-5)
+
+    @assert p > 0
+
+    y = y .- mean(y)
+
+    lse = y[p+1:end]
+    for t in 1:p
+        lse = [lse y[p-t+1:end-t]]
+    end #for
+
+    lse = lse[find(!any(isnan(lse), 2)), :]
+    phi_start = llsq(lse[:,2:end], lse[:,1], bias=false)
+
+    B_f = [zeros(p)'; eye(p-1) zeros(p-1)][:]
+    B_D = zeros(p^2, p)
+    B_D[[1 + (i-1)*(p^2 + p) for i in 1:p]] = 1
+    B = ParametrizedMatrix(B_f, B_D, (p,p))
+
+    pmatrices, params = zip(
+        (B, phi_start),
+        parametrize_none(1e-9*eye(p)),
+        parametrize_none([[1.] zeros(p-1)']),
+        parametrize_none([10.]'),
+        parametrize_none(y[1:p]),
+        parametrize_none(1e-9*eye(p))
+    )
+
+    params, _ = fit(y[(p+1):end], ParametrizedSSM(pmatrices...), SSMParameters(params...), niter=niter, eps=eps)
+    return params.B
+
+end #ar
+
+function arx{T}(y::Vector{T}, u::Array{T}, p::Int; niter::Int=1000, eps::Float64=1e-5)
+
+    nu = size(u, 2)
+    @assert p > 0
+    @assert nu > 0
+
+    y = y .- mean(y)
+
+    lse = y[p+1:end]
+    for t in 1:p
+        lse = [lse y[p-t+1:end-t]]
+    end #for
+
+    lse = [lse u[p+1:end, :]]
+    lse = lse[find(!any(isnan(lse), 2)), :]
+    llsq_fit = llsq(lse[:,2:end], lse[:,1], bias=false)
+    phi_start, beta_start = llsq_fit[1:p], llsq_fit[p+1:end]
+
+    B_f = [zeros(p)'; eye(p-1) zeros(p-1)][:]
+    B_D = zeros(p^2, p)
+    B_D[[1 + (i-1)*(p^2 + p) for i in 1:p]] = 1
+    B = ParametrizedMatrix(B_f, B_D, (p,p))
+
+    pmatrices, params = zip(
+        (B, phi_start),
+        parametrize_none(zeros(p, nu)),
+        parametrize_none(1e-5*eye(p)),
+        parametrize_none([[1.] zeros(p-1)']),
+        parametrize_full(beta_start'),
+        parametrize_none([10.]'),
+        parametrize_none(y[1:p]),
+        parametrize_none(1e-5*eye(p))
+    )
+
+    params, _ = fit(y[(p+1):end], ParametrizedSSM(pmatrices...), SSMParameters(params...), u=u[(p+1):end,:], niter=niter, eps=eps)
+    return params.B, params.A
+
+end #arx

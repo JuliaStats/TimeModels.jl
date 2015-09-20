@@ -65,22 +65,28 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
 
         m = pmodel(params)
 
-        # TODO: Premult u by U, A (and other common operations) for better performance?
-
         Qinv = inv(m.Q)
         Rinv = inv(m.R)
         Linv = inv(m.V1)
 
-        C1(t) = kron(xp.u[:, t]', eye(m.nx))
-        nu    = length(params.U) == 0 ? T[] : (inv(pmodel.U.D' * sum([(C1(t)' * Qinv * C1(t))''
+        C1 = zeros(m.nx, m.nu*m.nx, xp.n)
+        C2 = zeros(m.ny, m.nu*m.ny, xp.n)
+        Uu = m.U * xp.u
+        Au = m.A * xp.u
+
+        for t in 1:xp.n
+            C1[:, :, t] = kron(xp.u[:, t]', eye(m.nx))
+            C2[:, :, t] = kron(xp.u[:, t]', eye(m.ny))
+        end #for
+
+        nu    = length(params.U) == 0 ? T[] : (inv(pmodel.U.D' * sum([(C1[:, :, t]' * Qinv * C1[:, :, t])''
                   for t in 2:xp.n]) * pmodel.U.D) *
-                  sum([(C1(t)' * Qinv * (xp.ex[:, t] - m.B * xp.ex[:, t-1] - C1(t) * pmodel.U.f)
+                  sum([(C1[:, :, t]' * Qinv * (xp.ex[:, t] - m.B * xp.ex[:, t-1] - C1[:, :, t] * pmodel.U.f)
                   )'' for t in 2:xp.n]))[:]
 
-        C2(t) = kron(xp.u[:, t]', eye(m.ny))
-        alpha = length(params.A) == 0 ? T[] : (inv(pmodel.A.D' * sum([(C2(t)' * Rinv * C2(t))''
+        alpha = length(params.A) == 0 ? T[] : (inv(pmodel.A.D' * sum([(C2[:, :, t]' * Rinv * C2[:, :, t])''
                   for t in 1:xp.n]) * pmodel.A.D) *
-                  sum([(C2(t)' * Rinv * (xp.ey[:, t] - m.Z * xp.ex[:, t] - C2(t) * pmodel.A.f)
+                  sum([(C2[:, :, t]' * Rinv * (xp.ey[:, t] - m.Z * xp.ex[:, t] - C2[:, :, t] * pmodel.A.f)
                   )'' for t in 1:xp.n]))[:]
 
         p     = length(params.x1) == 0 ? T[] : inv(pmodel.x1.D' * Linv * pmodel.x1.D) *
@@ -92,28 +98,28 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
         beta  = length(params.B) == 0 ? T[] : (inv(sum([(pmodel.B.D' * kron(xp.exx[:, :, t-1], Qinv) *
                   pmodel.B.D)'' for t=2:xp.n])) * sum([(pmodel.B.D' * ((Qinv *
                   xp.exx1[:, :, t-1])[:] - kron(xp.exx[:, :, t-1], Qinv) * pmodel.B.f -
-                  (Qinv * m.U * xp.u[:, t] * xp.ex[:, t-1]')[:]))'' for t = 2:xp.n]))[:]
+                  (Qinv * Uu[:, t] * xp.ex[:, t-1]')[:]))'' for t = 2:xp.n]))[:]
 
         zeta  = length(params.Z) == 0 ? T[] : (inv(sum([(pmodel.Z.D' * kron(xp.exx[:, :, t], Rinv) *
                   pmodel.Z.D)'' for t=1:xp.n])) * sum([(pmodel.Z.D' * ((Rinv * 
                   xp.eyx[:, :, t])[:] - kron(xp.exx[:, :, t], Rinv) * pmodel.Z.f -
-                  (Rinv * m.A * xp.u[:, t] * xp.ex[:, t]')[:]))'' for t = 1:xp.n]))[:]
+                  (Rinv * Au[:, t] * xp.ex[:, t]')[:]))'' for t = 1:xp.n]))[:]
 
 
         q = length(params.Q) == 0 ? T[] : inv(sum([pmodel.Q.D' * pmodel.Q.D for t=2:xp.n])) *
                 sum([pmodel.Q.D' * (xp.exx[:, :, t] - xp.exx1[:, :, t-1] * m.B' -
-                m.B * xp.exx1[:, :, t-1]' - xp.ex[:, t] * xp.u[:, t]' * m.U'
-                - m.U * xp.u[:, t] * xp.ex[:, t]' + m.B * xp.exx[:, :, t-1] * m.B' +
-                m.B * xp.ex[:, t-1] * xp.u[:, t]' * m.U' +
-                m.U * xp.u[:, t] * xp.ex[:, t-1]' * m.B' + m.U * xp.u[:, t] * xp.u[:, t]' * m.U')[:]
+                m.B * xp.exx1[:, :, t-1]' - xp.ex[:, t] * Uu[:, t]'
+                - Uu[:, t] * xp.ex[:, t]' + m.B * xp.exx[:, :, t-1] * m.B' +
+                m.B * xp.ex[:, t-1] * Uu[:, t]' +
+                Uu[:, t] * xp.ex[:, t-1]' * m.B' + Uu[:, t] * Uu[:, t]')[:]
                 for t = 2:xp.n])
 
         r = length(params.R) == 0 ? T[] : inv(sum([pmodel.R.D' * pmodel.R.D for t=1:xp.n])) *
                 sum([pmodel.R.D' * (xp.eyy[:, :, t] - xp.eyx[:, :, t] * m.Z' -
-                m.Z * xp.eyx[:, :, t]' - xp.ey[:, t] * xp.u[:, t]' * m.A' -
-                m.A * xp.u[:, t] * xp.ey[:, t]' + m.Z * xp.exx[:, :, t] * m.Z' +
-                m.Z * xp.ex[:, t] * xp.u[:, t]' * m.A' + m.A * xp.u[:, t] * xp.ex[:, t]' * m.Z' +
-                m.A * xp.u[:, t] * xp.u[:, t]' * m.A')[:]
+                m.Z * xp.eyx[:, :, t]' - xp.ey[:, t] * Au[:, t]' -
+                Au[:, t] * xp.ey[:, t]' + m.Z * xp.exx[:, :, t] * m.Z' +
+                m.Z * xp.ex[:, t] * Au[:, t]' + Au[:, t] * xp.ex[:, t]' * m.Z' +
+                Au[:, t] * Au[:, t]')[:]
                 for t = 1:xp.n])
 
         return SSMParameters(beta, nu, q, zeta, alpha, r, p, lambda)
@@ -134,6 +140,9 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
         params        = maximization(expectations, model, params)
         niter -= 1
     end #while
+
+    niter > 0 ? nothing :
+        warn("Warning: Parameter estimation timed out - results may have failed to converge")
 
     return params, model(params)
 end #fit
