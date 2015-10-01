@@ -172,8 +172,7 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T})
 end
 
 
-function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T})
-    filt = kalman_filter(y, model)
+function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T}; filt::KalmanFiltered{T} = kalman_filter(y, model))
     n = size(y, 1)
     x_pred = filt.predicted'
     x_filt = filt.filtered'
