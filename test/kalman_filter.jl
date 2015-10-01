@@ -60,6 +60,11 @@ facts("Kalman Filter") do
             mod1 = build_model()
             x, y = TimeModels.simulate(mod1, 100)
             smooth = kalman_smooth(y, mod1)
+
+            filt = kalman_filter(y, mod1)
+            smooth2 = kalman_smooth(filt)
+
+            @fact smooth.smoothed --> smooth2.smoothed
         end
 
         context("Model fitting") do

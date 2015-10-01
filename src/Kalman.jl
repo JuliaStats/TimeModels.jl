@@ -192,6 +192,11 @@ function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T}; filt::KalmanFi
     return KalmanSmoothed(x_pred', x_filt', x_smooth', P_smoov, model, y, filt.loglik)
 end
 
+function kalman_smooth{T}(kfiltered::KalmanFiltered{T})
+    kalman_smooth(kfiltered.y, kfiltered.model, filt = kfiltered)
+end
+
+
 function fit{T}(y::Matrix{T}, build::Function, theta0::Vector{T})
     objective(theta) = kalman_filter(y, build(theta)).loglik
     kfit = Optim.optimize(objective, theta0)
