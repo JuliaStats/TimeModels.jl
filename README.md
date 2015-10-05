@@ -1,6 +1,9 @@
+TimeModels.jl
+============
 [![Build Status](https://travis-ci.org/JuliaStats/TimeModels.jl.svg?branch=master)](https://travis-ci.org/JuliaStats/TimeModels.jl)
+[![Coverage Status](https://coveralls.io/repos/JuliaStats/TimeModels.jl/badge.svg?branch=master)](https://coveralls.io/r/JuliaStats/TimeModels.jl?branch=master)
 [![TimeModels](http://pkg.julialang.org/badges/TimeModels_0.3.svg)](http://pkg.julialang.org/?pkg=TimeModels&ver=0.3)
-[![TimeModels](http://pkg.julialang.org/badges/TimeModels_0.4.svg)](http://pkg.julialang.org/?pkg=TimeModels&ver=0.4)
+
 
 ##A Julia package for modeling time series. 
 

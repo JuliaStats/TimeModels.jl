@@ -1,6 +1,7 @@
 TimeModels.jl is licensed under the MIT License:
 
-> Copyright (c) 2013-2014: Andrey Kolev, Sam Urmy, Theodore Papamarkou and other contributors.
+> Copyright (c) 2015-2014: Andrey Kolev, Sam Urmy, Theodore Papamarkou, Algorithm Alpha LLC, 
+Gord Stephen, Robert Luke and other contributors.
 >
 > Permission is hereby granted, free of charge, to any person obtaining
 > a copy of this software and associated documentation files (the
