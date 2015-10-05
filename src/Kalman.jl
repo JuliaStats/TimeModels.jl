@@ -1,6 +1,6 @@
 issquare(x::Matrix) = size(x, 1) == size(x, 2) ? true : false
 
-type StateSpaceModel{T}
+@compat type StateSpaceModel{T}
 	# Process transition and noise covariance
 	F::Union{Matrix{T}, Matrix{Function}}
 	V::Matrix{T}
@@ -11,7 +11,7 @@ type StateSpaceModel{T}
 	x0::Vector{T}
 	P0::Matrix{T}
 
-	function StateSpaceModel(F::Union{Matrix{T}, Matrix{Function}}, V::Matrix{T},
+	@compat function StateSpaceModel(F::Union{Matrix{T}, Matrix{Function}}, V::Matrix{T},
 	                G::Union{Matrix{T}, Matrix{Function}}, W::Matrix{T}, x0::Vector{T}, P0::Matrix{T})
             @assert issquare(F)
             @assert size(F, 1) == length(x0)
@@ -29,7 +29,7 @@ type StateSpaceModel{T}
 	end
 end
 
-function StateSpaceModel{T <: Real}(F::Union{Matrix{T}, Matrix{Function}}, V::Matrix{T}, G::Union{Matrix{T}, Matrix{Function}},
+@compat function StateSpaceModel{T <: Real}(F::Union{Matrix{T}, Matrix{Function}}, V::Matrix{T}, G::Union{Matrix{T}, Matrix{Function}},
 		W::Matrix{T}, x0::Vector{T}, P0::Matrix{T})
 	StateSpaceModel{T}(F, V, G, W, x0, P0)
 end
