@@ -8,7 +8,7 @@ end
 
 using Distributions
 using StatsBase
-using TimeSeries 
+using TimeSeries
 using NLopt
 using Optim
 using Compat
@@ -18,12 +18,12 @@ import Base.show
 export
   # Kalman exports
   StateSpaceModel,
-  KalmanFiltered, 
+  KalmanFiltered,
   KalmanSmoothed,
   simulate,
   kalman_filter,
   kalman_smooth,
-  fit, 
+  fit,
   # ARIMA exports
   arima_statespace,
   arima,
@@ -38,4 +38,4 @@ include("ARIMA.jl")
 include("GARCH.jl")
 include("diagnostic_tests.jl")
 
-end 
+end
