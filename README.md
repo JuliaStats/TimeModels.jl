@@ -1,6 +1,6 @@
 TimeModels.jl
 ============
-[![Build Status](https://travis-ci.org/JuliaStats/TimeModels.jl.svg?branch=master)](https://travis-ci.org/JuliaStats/TimeModels.jl
+[![Build Status](https://travis-ci.org/JuliaStats/TimeModels.jl.svg?branch=master)](https://travis-ci.org/JuliaStats/TimeModels.jl)
 
 [![TimeModels](http://pkg.julialang.org/badges/TimeModels_0.3.svg)](http://pkg.julialang.org/?pkg=TimeModels&ver=0.3)
 [![TimeModels](http://pkg.julialang.org/badges/TimeModels_0.4.svg)](http://pkg.julialang.org/?pkg=TimeModels&ver=0.4)
