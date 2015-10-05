@@ -11,8 +11,8 @@ TimeModels.jl
 
 ##A Julia package for modeling time series. 
 
-![Kalman Demo](doc/png/kalman.png)
-![Experimental acf plot](doc/png/acf_plot.png)
+![Kalman Demo](png/kalman.png)
+![Experimental acf plot](png/acf_plot.png)
 
 ## GARCH model
 ***
@@ -71,5 +71,3 @@ one-step-ahead volatility forecast
 ## References
 * T. Bollerslev (1986): Generalized Autoregressive Conditional Heteroscedasticity. Journal of Econometrics 31, 307–327.
 * R. F. Engle (1982): Autoregressive Conditional Heteroscedasticity with Estimates of the Variance of United Kingdom Inflation. Econometrica 50, 987–1008.
-
-
