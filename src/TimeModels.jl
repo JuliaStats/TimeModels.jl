@@ -26,10 +26,17 @@ export
   # diagnostic tests exports
   jbtest
 
+# Core functionality
 include("statespacemodel.jl")
-include("Kalman.jl")
+include("kalman_filter.jl")
+include("kalman_smooth.jl")
+include("parameter_estimation.jl")
+
+# Model specifications
 include("ARIMA.jl")
 include("GARCH.jl")
+
+# Tests
 include("diagnostic_tests.jl")
 
 end 

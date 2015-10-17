@@ -93,6 +93,25 @@ facts("Kalman Filter") do
             @fact size(filt.filtered) --> size(smooth.smoothed)
             @fact size(filt.error_cov) --> size(smooth.error_cov)
         end
+
+        context("Linear regression test") do
+            m, b, s, dt = 5, 2, 2, .1
+            t = 0:dt:10
+            y_true = m*t + b
+            input = 100*[sin(t/2) sin(t/4) cos(t/2) cos(t/4)] + 10
+            y_noisy = [y_true zeros(length(t)) -y_true] +
+                        100*[sin(t/2)+sin(t/4) sin(t/2)+cos(t/2) cos(t/2)+cos(t/4)] + 10 + randn(length(t), 3)
+            lm = StateSpaceModel([1 dt; 0 1], zeros(2,4), zeros(2,2),
+                    [1. 0; 0 0; -1 0], [1. 1 0 0; 1 0 1 0; 0 0 1 1], s*eye(3), zeros(2), 100*eye(2))
+            lm_filt = kalman_filter(y_noisy, lm, u=input)
+            @fact lm_filt.filtered[end,1] --> roughly(y_true[end, 1], atol=3*sqrt(lm_filt.error_cov[1,1,end]))
+            lm_smooth = kalman_smooth(lm_filt)
+            stderr = sqrt(lm_smooth.error_cov[1,1,:][:])
+            @fact lm_filt.filtered[end,:] --> lm_smooth.smoothed[end,:] 
+            @fact all(abs(y_true - lm_smooth.smoothed[:,1]) .< 3*stderr) --> true
+            @fact lm_smooth.smoothed[1,2] --> roughly(lm_smooth.smoothed[end, 2], atol=1e-12)
+        end
+
     end
 
 
@@ -154,24 +173,12 @@ facts("Kalman Filter") do
             #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 2]), width = 120, title="Smoothed State 2: $(x_est[2])")) =#
         end
 
-
     end
-
-    context("Linear regression test") do
-      m, b, s, dt = 5, 2, 2, .1
-      t = 0:dt:10
-      y_true = m*t + b
-      y_noisy = y_true + s*randn(length(t))
-      lm = StateSpaceModel([1 dt; 0 1], zeros(2,2), [1. 0], s*eye(1), zeros(2), 100*eye(2))
-      lm_filt = kalman_filter(y_noisy, lm)
-      @fact lm_filt.filtered[end,1] --> roughly(y_true[end], atol=4*sqrt(lm_filt.error_cov[1,1,end]))
-      lm_smooth = kalman_smooth(y_noisy, lm)
-      @fact all((y_true - lm_smooth.smoothed[:,1]) .< 4*sqrt(lm_smooth.error_cov[1,1,:][:])) --> true
-    end
-
 
     context("Correct failure") do
+        @fact_throws StateSpaceModel([1 0.1; 0 1], zeros(2,3), zeros(2,2),
+                [1. 0; 0 0; -1 0], [1. 1 0 0; 1 0 1 0; 0 0 1 1], s*eye(3), zeros(2), 100*eye(2))
     end
-end
 
+end
 
