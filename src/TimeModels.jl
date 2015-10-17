@@ -33,6 +33,7 @@ export
   # diagnostic tests exports
   jbtest
 
+include("statespacemodel.jl")
 include("Kalman.jl")
 include("ARIMA.jl")
 include("GARCH.jl")
