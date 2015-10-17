@@ -1,25 +1,27 @@
 issquare(x::Matrix) = size(x, 1) == size(x, 2) ? true : false
 
-@compat type StateSpaceModel{T}
+immutable StateSpaceModel{T}
 	# Process transition and noise covariance
-	F::Union{Matrix{T}, Matrix{Function}}
+	F::Function
 	V::Matrix{T}
 	# Observation and noise covariance
-	G::Union{Matrix{T}, Matrix{Function}}
+	G::Function
 	W::Matrix{T}
 	# Inital guesses at state and error covariance
 	x0::Vector{T}
 	P0::Matrix{T}
 
-	@compat function StateSpaceModel(F::Union{Matrix{T}, Matrix{Function}}, V::Matrix{T},
-	                G::Union{Matrix{T}, Matrix{Function}}, W::Matrix{T}, x0::Vector{T}, P0::Matrix{T})
-            @assert issquare(F)
-            @assert size(F, 1) == length(x0)
+	function StateSpaceModel(F::Function, V::Matrix{T},
+	                G::Function, W::Matrix{T}, x0::Vector{T}, P0::Matrix{T})
+            F1 = F(1)
+            G1 = G(1)
+            @assert issquare(F1)
+            @assert size(F1, 1) == length(x0)
             @assert issym(V)
-            @assert size(V) == size(F)
+            @assert size(V) == size(F1)
             @assert eigmin(V) >= 0
-            @assert size(G, 1) == size(W, 1)
-            @assert size(G, 2) == length(x0)
+            @assert size(G1, 1) == size(W, 1)
+            @assert size(G1, 2) == length(x0)
             @assert issym(W)
             @assert eigmin(W) >= 0
             @assert size(P0, 1) == length(x0)
@@ -29,9 +31,14 @@ issquare(x::Matrix) = size(x, 1) == size(x, 2) ? true : false
 	end
 end
 
-@compat function StateSpaceModel{T <: Real}(F::Union{Matrix{T}, Matrix{Function}}, V::Matrix{T}, G::Union{Matrix{T}, Matrix{Function}},
+function StateSpaceModel{T <: Real}(F::Function, V::Matrix{T}, G::Function,
 		W::Matrix{T}, x0::Vector{T}, P0::Matrix{T})
 	StateSpaceModel{T}(F, V, G, W, x0, P0)
+end
+
+function StateSpaceModel{T <: Real}(F::Matrix{T}, V::Matrix{T}, G::Matrix{T},
+		W::Matrix{T}, x0::Vector{T}, P0::Matrix{T})
+	StateSpaceModel{T}(_->F, V, _->G, W, x0, P0)
 end
 
 function show{T}(io::IO, mod::StateSpaceModel{T})

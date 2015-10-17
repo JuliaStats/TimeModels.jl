@@ -10,7 +10,7 @@ end
 
 function show{T}(io::IO, filt::KalmanFiltered{T})
 	n = size(filt.y, 1)
-	dx, dy = length(filt.model.x0), size(filt.model.G, 1)
+	dx, dy = length(filt.model.x0), size(filt.model.G(1), 1)
 	println("KalmanFiltered{$T}")
 	println("$n observations, $dx-D process x $dy-D observations")
 	println("Negative log-likelihood: $(filt.loglik)")
@@ -28,17 +28,10 @@ end
 
 function show{T}(io::IO, filt::KalmanSmoothed{T})
 	n = size(filt.y, 1)
-	dx, dy = length(filt.model.x0), size(filt.model.G, 1)
+	dx, dy = length(filt.model.x0), size(filt.model.G(1), 1)
 	println("KalmanSmoothed{$T}")
 	println("$n observations, $dx-D process x $dy-D observations")
 	println("Negative log-likelihood: $(filt.loglik)")
-end
-
-function eval_matrix(M::Matrix{Function}, i::Int, ArrayType::Type)
-    reshape(convert(Array{ArrayType}, [m(i) for m in M]), size(M))
-end
-function eval_matrix{T <: Real}(M::Matrix{T}, n::Int, ArrayType::Type)
-    M
 end
 
 function simulate{T}(model::StateSpaceModel{T}, n::Int)
@@ -52,7 +45,7 @@ function simulate{T}(model::StateSpaceModel{T}, n::Int)
 
     # dimensions of the process and observation series
     nx = length(model.x0)
-    ny = size(model.G, 1)
+    ny = size(model.G(1), 1)
 
     # create empty arrays to hold the state and observed series
     x = zeros(nx, n)
@@ -60,22 +53,22 @@ function simulate{T}(model::StateSpaceModel{T}, n::Int)
 
     # Cholesky decompositions of the covariance matrices, for generating
     # random noise
-    V_chol = @compat chol(model.V, Val{:L})
-    W_chol = @compat chol(model.W, Val{:L})
+    V_chol = chol(model.V, Val{:L})
+    W_chol = chol(model.W, Val{:L})
 
     # Generate the series
-    x[:, 1] = eval_matrix(model.F, 1, T) * model.x0 + V_chol * randn(nx)
-    y[:, 1] = eval_matrix(model.G, 1, T) * x[:, 1] + W_chol * randn(ny)
+    x[:, 1] = model.F(1) * model.x0 + V_chol * randn(nx)
+    y[:, 1] = model.G(1) * x[:, 1] + W_chol * randn(ny)
     for i=2:n
-        x[:, i] = eval_matrix(model.F, i, T) * x[:, i-1] + V_chol * randn(nx)
-        y[:, i] = eval_matrix(model.G, i, T) * x[:, i] + W_chol * randn(ny)
+        x[:, i] = model.F(i) * x[:, i-1] + V_chol * randn(nx)
+        y[:, i] = model.G(i) * x[:, i] + W_chol * randn(ny)
     end
 
     return x', y'
 end
 
 function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T})
-    @assert size(y,2) == size(model.G,1)
+    @assert size(y,2) == size(model.G(1),1)
 
     function kalman_recursions(y_i, G_i, W, x_pred_i, P_pred_i)
         if !any(isnan(y_i))
@@ -103,18 +96,18 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T})
     log_likelihood = n*ny*log(2pi)/2
 
     # first iteration
-    F_1 = eval_matrix(model.F, 1, T)
+    F_1 = model.F(1)
     x_pred[:, 1] = F_1 * model.x0
     P_pred[:, :, 1] = F_1 * model.P0 * F_1' + model.V
-    x_filt[:, 1], P_filt[:,:,1], dll = kalman_recursions(y[:, 1], eval_matrix(model.G, 1, T),
+    x_filt[:, 1], P_filt[:,:,1], dll = kalman_recursions(y[:, 1], model.G(1),
     model.W, x_pred[:,1], P_pred[:,:,1])
     log_likelihood += dll
 
     for i=2:n
-        F_i = eval_matrix(model.F, i, T)
+        F_i = model.F(i)
         x_pred[:, i] =  F_i * x_filt[:, i-1]
         P_pred[:, :, i] = F_i * P_filt[:, :, i-1] * F_i' + model.V
-        x_filt[:, i], P_filt[:,:,i], dll = kalman_recursions(y[:, i], eval_matrix(model.G, i, T),
+        x_filt[:, i], P_filt[:,:,i], dll = kalman_recursions(y[:, i], model.G(i),
         model.W, x_pred[:,i], P_pred[:,:,i])
         log_likelihood += dll
     end
@@ -135,7 +128,7 @@ function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T}; filt::KalmanFi
     x_smooth[:, n] = x_filt[:, n]
     P_smoov[:, :, n] = P_filt[:, :, n]
     for i = (n-1):-1:1
-        J = P_filt[:, :, i] * eval_matrix(model.F, i, T)' * inv(P_pred[:,:,i+1])
+        J = P_filt[:, :, i] * model.F(i)' * inv(P_pred[:,:,i+1])
         x_smooth[:, i] = x_filt[:, i] + J * (x_smooth[:, i+1] - x_pred[:, i+1])
         P_smoov[:, :, i] = P_filt[:, :, i] + J * (P_smoov[:, :, i+1] - P_pred[:,:,i+1]) * J'
     end
