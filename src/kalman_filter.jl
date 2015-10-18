@@ -1,20 +1,20 @@
 type KalmanFiltered{T}
-	filtered::Array{T}
-	predicted::Array{T}
-	error_cov::Array{T}
-	pred_error_cov::Array{T}
-	model::StateSpaceModel
-	y::Array{T}
-  u::Array{T}
-	loglik::T
+    filtered::Array{T}
+    predicted::Array{T}
+    error_cov::Array{T}
+    pred_error_cov::Array{T}
+    model::StateSpaceModel
+    y::Array{T}
+    u::Array{T}
+    loglik::T
 end
 
 function show{T}(io::IO, filt::KalmanFiltered{T})
-	n = size(filt.y, 1)
-	dx, dy = filt.model.nx, filt.model.ny 
-	println("KalmanFiltered{$T}")
-	println("$n observations, $dx-D process x $dy-D observations")
-	println("Negative log-likelihood: $(filt.loglik)")
+    n = size(filt.y, 1)
+    dx, dy = filt.model.nx, filt.model.ny
+    println("KalmanFiltered{$T}")
+    println("$n observations, $dx-D process x $dy-D observations")
+    println("Negative log-likelihood: $(filt.loglik)")
 end
 
 function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu))

@@ -57,12 +57,11 @@ facts("Kalman Filter") do
         context("Smoothing") do
             mod1 = build_model()
             x, y = TimeModels.simulate(mod1, 100)
-            smooth = kalman_smooth(y, mod1)
 
-            filt = kalman_filter(y, mod1)
-            smooth2 = kalman_smooth(filt)
+            smooth = kalman_filter(y, mod1) |> kalman_smooth
+            smooth2 = kalman_smooth(y, mod1)
 
-            @fact smooth.smoothed --> smooth2.smoothed
+            @fact smooth.smoothed --> roughly(smooth2.smoothed, atol=1e-2)
         end
 
         context("Model fitting") do
@@ -77,21 +76,26 @@ facts("Kalman Filter") do
             y[1:9:end] = NaN
             y[100] = NaN
             filt = kalman_filter(y, mod1)
-            smooth = kalman_smooth(y, mod1)
+            smooth = kalman_smooth(filt)
+            smooth2 = kalman_smooth(y, mod1)
             @fact any(isnan(filt.filtered)) --> false
             @fact any(isnan(smooth.filtered)) --> false
+            @fact any(isnan(smooth2.smoothed)) --> false
         end
 
         context("Return sizes") do
             mod1 = build_model()
             x, y = TimeModels.simulate(mod1, 100)
             filt = kalman_filter(y, mod1)
-            smooth = kalman_smooth(y, mod1)
+            smooth = kalman_smooth(filt)
+            smooth2 = kalman_smooth(y, mod1)
 
             @fact size(filt.filtered) --> size(filt.predicted)
             @fact size(filt.filtered) --> size(smooth.filtered)
             @fact size(filt.filtered) --> size(smooth.smoothed)
             @fact size(filt.error_cov) --> size(smooth.error_cov)
+            @fact size(filt.filtered) --> size(smooth2.smoothed)
+            @fact size(filt.error_cov) --> size(smooth2.error_cov)
         end
 
         context("Linear regression test") do
@@ -105,11 +109,19 @@ facts("Kalman Filter") do
                     [1. 0; 0 0; -1 0], [1. 1 0 0; 1 0 1 0; 0 0 1 1], s*eye(3), zeros(2), 100*eye(2))
             lm_filt = kalman_filter(y_noisy, lm, u=input)
             @fact lm_filt.filtered[end,1] --> roughly(y_true[end, 1], atol=3*sqrt(lm_filt.error_cov[1,1,end]))
+
             lm_smooth = kalman_smooth(lm_filt)
             stderr = sqrt(lm_smooth.error_cov[1,1,:][:])
-            @fact lm_filt.filtered[end,:] --> lm_smooth.smoothed[end,:] 
+            @fact lm_filt.filtered[end,:] --> lm_smooth.smoothed[end,:]
             @fact all(abs(y_true - lm_smooth.smoothed[:,1]) .< 3*stderr) --> true
-            @fact lm_smooth.smoothed[1,2] --> roughly(lm_smooth.smoothed[end, 2], atol=1e-12)
+            @fact ones(t) * lm_smooth.smoothed[1,2] --> roughly(lm_smooth.smoothed[:, 2], atol=1e-12)
+
+            # Repeat with DK smoother
+            lm_smooth = kalman_smooth(y_noisy, lm, u=input)
+            stderr = sqrt(lm_smooth.error_cov[1,1,:][:])
+            @fact all(abs(y_true - lm_smooth.smoothed[:,1]) .< 3*stderr) --> true
+            @fact ones(t) * lm_smooth.smoothed[1,2] --> roughly(lm_smooth.smoothed[:, 2], atol=1e-12)
+
         end
 
     end
