@@ -74,7 +74,7 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
 
         # Predict using last iteration's values
         if t > 1
-            x_pred_t = Ft * x_pred_t + model.B * ut + Kt * innov_t
+            x_pred_t = Ft * x_pred_t + model.B(t-1) * ut + Kt * innov_t
             V_pred_t = Ft * V_pred_t * (Ft - Kt * Gt)' + model.V
             V_pred_t = (V_pred_t + V_pred_t')/2
         end #if
@@ -87,10 +87,11 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
             ynnt = y_notnan[:, t]
             I1, I2 = diagm(ynnt), diagm(!ynnt)
             Gt = I1 * model.G(t)
-            Dt = I1 * model.D
+            Dt = I1 * model.D(t)
             Wt = I1 * model.W * I1 + I2 * model.W * I2
         else
             Gt = model.G(t)
+            Dt = model.D(t)
         end #if
 
         Ft = model.F(t)
@@ -107,8 +108,8 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
         K[:, :, t]              = Kt
         log_likelihood += marginal_likelihood(innov_t, innov_cov_t, innov_cov_inv_t)
 
-        # Reset Wt, Dt if nessecary
-        missing_obs && ((Dt, Wt) = (model.D, model.W))
+        # Reset Wt if nessecary
+        missing_obs && (Wt = model.W)
 
     end #for
 
