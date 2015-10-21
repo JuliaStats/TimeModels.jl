@@ -63,7 +63,7 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
     innov_cov_inv_t     = copy(innov_cov_t)
     Kt                  = zeros(model.nx, model.ny)
 
-    Ft, Gt, Dt, Wt, ut  = model.F(1), model.G(1), model.D, model.W, zeros(model.nu)
+    Ft, Gt, Dt, Wt, ut  = model.F(1), model.G(1), model.D(1), model.W(1), zeros(model.nu)
 
     log_likelihood = n*model.ny*log(2pi)/2
     marginal_likelihood(innov::Vector, innov_cov::Matrix, innov_cov_inv::Matrix) =
@@ -75,27 +75,27 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
         # Predict using last iteration's values
         if t > 1
             x_pred_t = Ft * x_pred_t + model.B(t-1) * ut + Kt * innov_t
-            V_pred_t = Ft * V_pred_t * (Ft - Kt * Gt)' + model.V
+            V_pred_t = Ft * V_pred_t * (Ft - Kt * Gt)' + model.V(t)
             V_pred_t = (V_pred_t + V_pred_t')/2
         end #if
         x_pred[:, t]    = x_pred_t
         V_pred[:, :, t] = V_pred_t
+
+        # Assign new values
+        Ft = model.F(t)
+        Gt = model.G(t)
+        Dt = model.D(t)
+        Wt = model.W(t)
+        ut = u[:, t]
 
         # Check for and handle missing observation values
         missing_obs = !all(y_notnan[:, t])
         if missing_obs
             ynnt = y_notnan[:, t]
             I1, I2 = diagm(ynnt), diagm(!ynnt)
-            Gt = I1 * model.G(t)
-            Dt = I1 * model.D(t)
-            Wt = I1 * model.W * I1 + I2 * model.W * I2
-        else
-            Gt = model.G(t)
-            Dt = model.D(t)
+            Gt, Dt = I1 * Gt, I1 * Dt
+            Wt = I1 * Wt * I1 + I2 * Wt * I2
         end #if
-
-        Ft = model.F(t)
-        ut = u[:, t]
 
         # Compute nessecary filtering quantities
         innov_t         = y[:, t] - Gt * x_pred_t - Dt * ut
@@ -107,9 +107,6 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
         innov_cov_inv[:, :, t]  = innov_cov_inv_t
         K[:, :, t]              = Kt
         log_likelihood += marginal_likelihood(innov_t, innov_cov_t, innov_cov_inv_t)
-
-        # Reset Wt if nessecary
-        missing_obs && (Wt = model.W)
 
     end #for
 

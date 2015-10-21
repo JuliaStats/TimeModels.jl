@@ -25,11 +25,11 @@ end
 # Time varying model
 function sinusoid_model(omega::Real; fs::Int=256, x0=[0.5, -0.5], W::AbstractFloat=0.1)
     F(n)  = [1.0 0; 0 1.0]
-    V     = diagm([1e-10, 1e-10])
+    V(n)  = diagm([1e-10, 1e-10])
     G(n)  = [cos(2*pi*omega*(1/fs)*n) -sin(2*pi*omega*(1/fs)*n)]
-    W     = diagm([W])
+    w(n)  = diagm([W])
     P0    = diagm([1e-1, 1e-1])
-    StateSpaceModel(F, V, G, W, x0, P0)
+    StateSpaceModel(F, V, G, w, x0, P0)
 end
 
 

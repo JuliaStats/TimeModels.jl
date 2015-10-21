@@ -24,11 +24,11 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=ze
     @assert size(u,2) == model.nu
 
     function kalman_recursions(y_i::Vector{T}, u_i::Vector{T},
-                                  G_i::Matrix{T}, D_i::Matrix{T},
+                                  G_i::Matrix{T}, D_i::Matrix{T}, W_i::Matrix{T},
                                   x_pred_i::Vector{T}, P_pred_i::Matrix{T})
         if !any(isnan(y_i))
             innov =  y_i - G_i * x_pred_i - D_i * u_i
-            S = G_i * P_pred_i * G_i' + model.W  # Innovation covariance
+            S = G_i * P_pred_i * G_i' + W_i  # Innovation covariance
             K = P_pred_i * G_i' / S # Kalman gain
             x_filt_i = x_pred_i + K * innov
             P_filt_i = (I - K * G_i) * P_pred_i
@@ -55,15 +55,17 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=ze
     x_pred[:, 1] = model.x1
     P_pred[:, :, 1] = model.P1
     x_filt[:, 1], P_filt[:,:,1], dll = kalman_recursions(y[:, 1], u[:, 1],
-                                            model.G(1), model.D(1), model.x1, model.P1)
+                                            model.G(1), model.D(1), model.W(1),
+                                            model.x1, model.P1)
     log_likelihood += dll
 
     for i=2:n
         F_i1 = model.F(i)
         x_pred[:, i] =  F_i1 * x_filt[:, i-1] + model.B(i-1) * u[:, i-1]
-        P_pred[:, :, i] = F_i1 * P_filt[:, :, i-1] * F_i1' + model.V
+        P_pred[:, :, i] = F_i1 * P_filt[:, :, i-1] * F_i1' + model.V(i-1)
         x_filt[:, i], P_filt[:,:,i], dll = kalman_recursions(y[:, i], u[:, i],
-                                                model.G(i), model.D(i), x_pred[:,i], P_pred[:,:,i])
+                                                model.G(i), model.D(i), model.W(i),
+                                                x_pred[:,i], P_pred[:,:,i])
         log_likelihood += dll
     end
 
