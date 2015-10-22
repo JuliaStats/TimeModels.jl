@@ -1,16 +1,9 @@
 module TimeModels
 
-if VERSION < v"0.4-"
-        using Dates
-    else
-        using Base.Dates
-end
-
-using Compat
+using Base.Dates
 using Distributions
 using StatsBase
 using TimeSeries 
-using NLopt
 using Optim
 
 import Base: show
@@ -33,9 +26,17 @@ export
   # diagnostic tests exports
   jbtest
 
-include("Kalman.jl")
+# Core functionality
+include("statespacemodel.jl")
+include("kalman_filter.jl")
+include("kalman_smooth.jl")
+include("parameter_estimation.jl")
+
+# Model specifications
 include("ARIMA.jl")
 include("GARCH.jl")
+
+# Tests
 include("diagnostic_tests.jl")
 
 end 
