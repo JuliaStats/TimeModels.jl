@@ -105,8 +105,10 @@ facts("Kalman Filter") do
             input = 100*[sin(t/2) sin(t/4) cos(t/2) cos(t/4)] + 10
             y_noisy = [y_true zeros(length(t)) -y_true] +
                         100*[sin(t/2)+sin(t/4) sin(t/2)+cos(t/2) cos(t/2)+cos(t/4)] + 10 + randn(length(t), 3)
-            lm = StateSpaceModel([1 dt; 0 1], zeros(2,4), zeros(2,2),
-                    [1. 0; 0 0; -1 0], [1. 1 0 0; 1 0 1 0; 0 0 1 1], s*eye(3), zeros(2), 100*eye(2))
+            lm = StateSpaceModel([1 dt; 0 1], zeros(2,2),
+                                  [1. 0; 0 0; -1 0], s*eye(3),
+                                  zeros(2), 100*eye(2),
+                                  B=zeros(2, 4), D=[1. 1 0 0; 1 0 1 0; 0 0 1 1])
             lm_filt = kalman_filter(y_noisy, lm, u=input)
             @fact lm_filt.filtered[end,1] --> roughly(y_true[end, 1], atol=3*sqrt(lm_filt.error_cov[1,1,end]))
 
