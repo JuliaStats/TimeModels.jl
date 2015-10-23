@@ -9,78 +9,65 @@ end #fit
 
 # Expectation-Maximization (EM) parameter estimation
 
-function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
+function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
           u::Array{T}=zeros(size(y,1), size(model.A, 2)), eps::Float64=1e-6, niter::Int=typemax(Int))
 
-    function em_kernel{T}(y::Array, u::Array, pmodel::ParametrizedSSM, params::SSMParameters{T})
+    n = size(y, 1)
+    @assert n == size(u, 1)
 
-        function lag1_smooth(y::Array, u::Array, model::StateSpaceModel)
-            B_stack = [model.B zeros(model.B); eye(model.nx) zeros(model.B)]
-            U_stack = [model.U; zeros(model.U)]
-            G_stack = [model.G; zeros(model.G)]
-            Z_stack = [model.Z zeros(model.Z)]
-            x1_stack = [model.x1; zeros(model.x1)]
-            V1_stack = [model.V1 zeros(model.V1); zeros(model.V1) zeros(model.V1)]
-            stack_model = StateSpaceModel(B_stack, U_stack, G_stack, model.Q, Z_stack, model.A, model.H, model.R, x1_stack, V1_stack)
-            stack_smoothed = smooth(y, stack_model, u=u)
-            V     = SparseMatrixCSC[Vt[1:model.nx, 1:model.nx] for Vt in stack_smoothed.V]
-            Vlag1 = SparseMatrixCSC[Vt[1:model.nx, (model.nx+1):end] for Vt in stack_smoothed.V]
-            return stack_smoothed.x[:, 1:model.nx]', V, Vlag1, stack_smoothed.loglik
-        end #function
+    y_orig = copy(y)
+    y = y'
+    y_notnan = !isnan(y)
+    y = y .* y_notnan
 
-        estimate_B   = length(params.B) > 0
-        estimate_U   = length(params.U) > 0
-        estimate_Q   = length(params.Q) > 0
-        estimate_Z   = length(params.Z) > 0
+    u_orig = copy(u)
+    u = u'
+
+    function em_kernel!{T}(params::SSMParameters{T})
+
         estimate_A   = length(params.A) > 0
+        estimate_B   = length(params.B) > 0
+        estimate_Q   = length(params.Q) > 0
+        estimate_C   = length(params.C) > 0
+        estimate_D   = length(params.D) > 0
         estimate_R   = length(params.R) > 0
         estimate_x1  = length(params.x1) > 0
-        estimate_V1  = length(params.V1) > 0
+        estimate_P1  = length(params.P1) > 0
 
         m = pmodel(params)
-        spB = sparse(m.B)
-        spU = sparse(m.U)
 
         print("Expectations (smoothing)... ")
         tic()
 
         if estimate_B | estimate_Q
-            exs, V, Vlag1, loglik = lag1_smooth(y, u, m)
+            exs, P, Plag1, loglik = lag1_smooth(y, u, m)
         else
             smoothed = smooth(y, m, u=u)
-            exs, V, loglik = smoothed.x', smoothed.V, smoothed.loglik
+            exs, P, loglik = smoothed.x', smoothed.V, smoothed.loglik
         end
 
         toc()
         println("Negative log-likelihood: ", loglik)
 
-        y = y'
-        u = u'
-        n = size(y,2)
-
         print("Maximizations... ")
         tic()
 
-        y_notnan = !isnan(y)
-        y = y .* y_notnan
-
         if estimate_B | estimate_U | estimate_Q
-            phi = (m.G' * m.G) \ m.G'
-            Qinv = phi' * inv(m.Q) * phi
-            spQinv = sparse(Qinv)
+            phi(t) = (pmodel.G(t)' * pmodel.G(t)) \ pmodel.G(t)'
+            Qinv(t) = phi(t)' * inv(pmodel.Q(params.Q)) * phi
         end #if BU
 
         if estimate_U | estimate_Z | estimate_A | estimate_R
-            xi = (m.H' * m.H) \ m.H'
-            Rinv = xi' * inv(m.R) * xi
+            xi(t) = (pmodel.H(t)' * pmodel.H(t)) \ pmodel.H(t)'
+            Rinv(t) = xi(t)' * inv(pmodel.R(params.R)) * xi(t)
         end #if
 
         if estimate_x1
-            Linv = inv(m.V1) #TODO: Degenerate accomodations?
+            Linv = inv(m.P1) #TODO: Degenerate accomodations?
         end #if
 
-        HRH = m.H * m.R * m.H'
-        HRH_nonzero_rows = diag(HRH) .!= 0
+        HRH(t) = pmodel.H(t) * pmodel.R(t) * pmodel.H(t)'
+        HRH_nonzero_rows(t) = diag(HRH(t)) .!= 0
 
         function get_Nt(y_notnan_t::Vector{Bool})
             O = eye(m.ny)[find(y_notnan_t & HRH_nonzero_rows), :]
@@ -92,40 +79,36 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
 
         yt = y[:, 1]
         Nt = get_Nt(y_notnan[:, 1])
-        ey = yt - Nt * (yt - m.Z * exs[:, 1] - m.A * u[:, 1])
+        ey = yt - Nt * (yt - m.C(1) * exs[:, 1] - m.D(1) * u[:, 1])
 
-        Uut = spU * u[:, 1]
-        Aut = m.A * u[:, 1]
+        Uut = m.B(1) * u[:, 1]
+        Aut = m.D(1) * u[:, 1]
         
-        if estimate_B # B setup
-            spB_D = sparse(pmodel.B.D)
+        if estimate_A # B setup
             beta_S1 = zeros(length(params.B), length(params.B))
             beta_S2 = zeros(params.B)
         end #if B
 
-        if estimate_U # U setup
-            spU_f = sparse(pmodel.U.f)
-            spU_D = sparse(pmodel.U.D)
-
-            deterministic = all(m.G .== 0, 2)
+        if estimate_B # U setup
+            deterministic = all(model.G(1) .== 0, 2)
             OQ0, OQp = speye(m.nx)[find(deterministic), :], speye(m.nx)[find(!deterministic), :]
 
-            nu_kp = kron(u[:, 1]', speye(m.nx))
-            fU = nu_kp * spU_f 
-            DU = nu_kp * spU_D 
+            nu_kp = kron(u[:, 1]', eye(m.nx))
+            fU = nu_kp * pmodel.A.f 
+            DU = nu_kp * pmodel.A.D 
 
-            Idt = speye(m.nx)
-            B_ = speye(m.nx)
-            f_ = nu_kp * spU_f * 0
-            D_ = nu_kp * spU_D * 0
-            M = sparse((m.B .!= 0) * 1.)
+            Idt = eye(m.nx)
+            B_  = eye(m.nx)
+            f_  = nu_kp * pmodel.A.f * 0
+            D_  = nu_kp * pmodel.D.f * 0
+            M   = m.B(1) .!= 0
             M_t = copy(M)
             EX0 = exs[:, 1]
             potential_deterministic_rows = all((OQ0 * M_t * OQp') .== 0, 2)[:]
 
-            Dt1 = ey - m.Z * (I - Idt) * ex - m.Z * Idt * (B_ * EX0 + f_) - Aut 
-            Dt2 = m.Z * Idt * D_
-            Dt3 = zeros(model.nx) 
+            Dt1 = ey - m.C(1) * (I - Idt) * ex - m.C(1) * Idt * (B_ * EX0 + f_) - Aut 
+            Dt2 = m.C(1) * Idt * D_
+            Dt3 = zeros(pmodel.nx) 
             Dt4 = DU * 0
 
             Idt1 = Idt
@@ -142,14 +125,14 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
             q_S2 = zeros(params.Q)
         end #if
 
-        if estimate_Z # Z setup
-            zeta_S1 = zeros(length(params.Z), length(params.Z)) 
-            zeta_S2 = zeros(params.Z)
+        if estimate_C # Z setup
+            zeta_S1 = zeros(length(params.C), length(params.C)) 
+            zeta_S2 = zeros(params.C)
         end #if
 
-        if estimate_A # A setup
-            alpha_S1 = zeros(length(params.A), length(params.A)) 
-            alpha_S2 = zeros(params.A)
+        if estimate_D # A setup
+            alpha_S1 = zeros(length(params.D), length(params.D)) 
+            alpha_S2 = zeros(params.D)
         end #if
 
         if estimate_R # R setup
@@ -161,34 +144,33 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
 
             ex_prev = ex
             ex      = exs[:, t]
-            Vt      = V[t]
+            At      = m.A(t)
+            Vt      = V[:, :, t]
             ut      = u[:, t]
 
-            println(Vt)
-
-            if estimate_B | estimate_Q | estimate_Z
+            if estimate_A | estimate_Q | estimate_C
 
                 exx_prev = exx
                 exx = Vt + ex * ex'
 
-                if (estimate_B | estimate_Q) && t > 1
+                if (estimate_A | estimate_Q) && t > 1
 
-                    exx1 = Vlag1[t] + ex * ex_prev'
+                    exx1 = Vlag1[:, :, t] + ex * ex_prev'
                     Uut_prev = Uut
-                    Uut = spU * ut
+                    Uut = m.B(t) * ut
 
-                    if estimate_B
-                        beta_kp = kron(exx_prev, spQinv)
-                        beta_S1 += spB_D' * beta_kp * spB_D
+                    if estimate_A
+                        beta_kp = kron(exx_prev, Qinv)
+                        beta_S1 += pmodel.B.D' * beta_kp * pmodel.B.D 
                         beta_S2 += pmodel.B.D' * (vec(Qinv * exx1) -
                                       beta_kp * pmodel.B.f - vec(Qinv * Uut_prev * ex_prev'))
                     end #if B
 
                     if estimate_Q
                         q_S1 += pmodel.Q.D' * pmodel.Q.D
-                        q_S2 += pmodel.Q.D' * vec(phi * (exx - exx1 * spB' -
-                                    spB * exx1' - ex * Uut_prev' - Uut_prev * ex' + spB * exx_prev * spB' +
-                                    spB * ex_prev * Uut_prev' + Uut_prev * ex_prev' * spB' + Uut_prev * Uut_prev') * phi')
+                        q_S2 += pmodel.Q.D' * vec(phi(t) * (exx - exx1 * At' -
+                                    At * exx1' - ex * Uut_prev' - Uut_prev * ex' + At * exx_prev * At' +
+                                    At * ex_prev * Uut_prev' + Uut_prev * ex_prev' * At' + Uut_prev * Uut_prev') * phi(t)')
                     end #if Q
 
                 end #if BQ
@@ -197,13 +179,14 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
 
             if estimate_Z | estimate_R | estimate_U | estimate_A
                 yt = y[:, t]
+                Ct = m.C(t)
                 Nt = get_Nt(y_notnan[:, t])
-                Aut = m.A * ut
-                ey = yt - Nt * (yt - m.Z * ex - Aut)
+                Aut = m.D(t) * ut
+                ey = yt - Nt * (yt - Ct * ex - Aut)
 
                 if estimate_Z | estimate_R
 
-                    eyx = Nt * m.Z * Vt + ey * ex'
+                    eyx = Nt * Ct * Vt + ey * ex'
 
                     if estimate_Z
                         zeta_kp = kron(exx, Rinv)
@@ -214,11 +197,11 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
 
                     if estimate_R
                         I2 = diagm(!y_notnan[:, t])
-                        eyy = I2 * (Nt * HRH' + Nt * m.Z * Vt * m.Z' * Nt') * I2 + ey * ey'
+                        eyy = I2 * (Nt * HRH(t)' + Nt * Ct * Vt * Ct' * Nt') * I2 + ey * ey'
                         r_S1 += pmodel.R.D' * pmodel.R.D
-                        r_S2 += pmodel.R.D' * vec(xi * (eyy - eyx * m.Z' -
-                                    m.Z * eyx' - ey * Aut' - Aut * ey' + m.Z * exx * m.Z' +
-                                    m.Z * ex * Aut' + Aut * ex' * m.Z' + Aut * Aut') * xi')
+                        r_S2 += pmodel.R.D' * vec(xi(t) * (eyy - eyx * Ct' -
+                                    Ct * eyx' - ey * Aut' - Aut * ey' + Ct * exx * Ct' +
+                                    Ct * ex * Aut' + Aut * ex' * Ct' + Aut * Aut') * xi(t)')
                     end #if R
 
                 end #if ZR
@@ -226,24 +209,24 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
                 if estimate_U
 
                     potential_deterministic_rows = all((OQ0 * M_t * OQp') .== 0, 2)[:]
-                    Idt = sparse(diagm(OQ0' * potential_deterministic_rows))
-                    nu_kp = kron(ut', speye(m.nx))
-                    B_ = spB * Bt1_
+                    Idt = diagm(OQ0' * potential_deterministic_rows)
+                    nu_kp = kron(ut', eye(m.nx))
+                    B_ = At * Bt1_
                     fU = nu_kp * spU_f
                     DU = nu_kp * spU_D
-                    f_ = spB * ft1_ + fU
-                    D_ = spB * Dt1_ + DU 
+                    f_ = At * ft1_ + fU
+                    D_ = At * Dt1_ + DU 
 
-                    Dt1 = ey - m.Z * (I - Idt) * ex - m.Z * Idt * (B_ * EX0 + f_) - Aut 
-                    Dt2 = m.Z * Idt * D_
-                    Dt3 = ex - spB * (I - Idt1) * ex_prev -
-                                spB * Idt1 * (Bt1_ * EX0 + ft1_) - fU 
-                    Dt4 = DU + spB * Idt1 * Dt1_ 
+                    Dt1 = ey - Ct * (I - Idt) * ex - Ct * Idt * (B_ * EX0 + f_) - Aut 
+                    Dt2 = Ct * Idt * D_
+                    Dt3 = ex - At * (I - Idt1) * ex_prev -
+                                At * Idt1 * (Bt1_ * EX0 + ft1_) - fU 
+                    Dt4 = DU + At * Idt1 * Dt1_ 
 
                     nu_S1 += Dt4' * spQinv * Dt4 + Dt2' * Rinv * Dt2
                     nu_S2 += Dt4' * spQinv * Dt3 + Dt2' * Rinv * Dt1 
 
-                    t <= (model.nx +1) ? M_t *= M : nothing
+                    t <= (pmodel.nx +1) ? M_t *= M : nothing
                     Idt1 = Idt
                     Bt1_ = B_
                     ft1_ = f_
@@ -255,30 +238,30 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
                     alpha_kp = kron(ut', eye(m.ny))
                     alpha_S1 += pmodel.A.D' * alpha_kp' * Rinv * alpha_kp * pmodel.A.D
                     alpha_S2 += pmodel.A.D' * alpha_kp' * Rinv * 
-                                    (ey - m.Z * ex - alpha_kp * pmodel.A.f)
+                                    (ey - Ct * ex - alpha_kp * pmodel.A.f)
                 end #if A
 
             end #if ZRUA
 
         end #for
 
-        beta    = estimate_B ? beta_S1 \ beta_S2    : T[]
-        nu      = estimate_U ? nu_S1 \ nu_S2        : T[]
-        q       = estimate_Q ? q_S1 \ q_S2          : T[]
+        params.A[:]  = estimate_A ? beta_S1 \ beta_S2    : T[]
+        params.B[:]  = estimate_B ? nu_S1 \ nu_S2        : T[]
+        params.Q[:]  = estimate_Q ? q_S1 \ q_S2          : T[]
 
-        zeta    = estimate_Z ? zeta_S1 \ zeta_S2    : T[]
-        alpha   = estimate_A ? alpha_S1 \ alpha_S2  : T[]
-        r       = estimate_R ? r_S1 \ r_S2          : T[]
+        params.C[:]  = estimate_C ? zeta_S1 \ zeta_S2    : T[]
+        params.D[:]  = estimate_D ? alpha_S1 \ alpha_S2  : T[]
+        params.R[:]  = estimate_R ? r_S1 \ r_S2          : T[]
 
-        p       = length(params.x1) == 0 ? T[] : (pmodel.x1.D' * Linv * pmodel.x1.D) \
-                        pmodel.x1.D' * Linv * (exs[:, 1] - pmodel.x1.f)
-        lambda  = length(params.V1) == 0 ? T[] : (pmodel.V1.D' * pmodel.V1.D) \ pmodel.V1.D' *
+        params.x1[:] = estimate_x1 ? (pmodel.x1.D' * Linv * pmodel.x1.D) \
+                        pmodel.x1.D' * Linv * (exs[:, 1] - pmodel.x1.f) : T[]
+        params.P1[:] = estimate_P1 ? (pmodel.V1.D' * pmodel.V1.D) \ pmodel.V1.D' *
                         vec(V[1] + exs[:, 1] * exs[:, 1]' -
-                        exs[:, 1]*m.x1' - m.x1*exs[:, 1]' + m.x1*m.x1')
+                        exs[:, 1]*m.x1' - m.x1*exs[:, 1]' + m.x1*m.x1') : T[]
 
         toc()
 
-        return SSMParameters(beta, nu, q, zeta, alpha, r, p, lambda), loglik
+        return loglik
 
     end #em_kernel
 
@@ -288,38 +271,37 @@ function fit{T}(y::Array{T}, model::ParametrizedSSM, params::SSMParameters;
     ll, ll_prev = Inf, Inf
 
     while (niter > 0) & (fraction_change(ll_prev, ll) > eps)
-        ll_prev     = ll 
-        params, ll  = em_kernel(y, u, model, params)
-        println(params)
+        ll_prev = ll 
+        ll      = em_kernel!(params)
         niter -= 1
     end #while
 
     niter > 0 ? nothing :
         warn("Parameter estimation timed out - results may have failed to converge")
 
-    return params, model(params)
+    return params, pmodel(params)
 end #fit
 
 function fit{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu),
               eps::Float64=1e-6, niter::Int=typemax(Int))
 
     # B, Z, x1 default to parametrized as fully unconstrained
-    B, B_params = parametrize_full(model.B)
-    Z, Z_params = parametrize_full(model.Z)
+    A, A_params = parametrize_full(model.A(1))
+    C, C_params = parametrize_full(model.C(1))
     x1, x1_params = parametrize_full(model.x1)
 
     # U, A default to fixed
-    U, U_params = parametrize_none(model.U)
-    A, A_params = parametrize_none(model.A)
+    B, B_params = parametrize_none(model.B(1))
+    D, D_params = parametrize_none(model.D(1))
 
     # Q, R, V1 default to parametrized as diagonal with independent elements - any other values
     #   are ignored / set to zero 
-    Q, Q_params = parametrize_diag(diag(model.Q))
-    R, R_params = parametrize_diag(diag(model.R))
-    V1, V1_params = parametrize_diag(diag(model.V1))
+    Q, Q_params = parametrize_diag(diag(model.V(1)))
+    R, R_params = parametrize_diag(diag(model.W(1)))
+    P1, P1_params = parametrize_diag(diag(model.P1))
 
-    pmodel = ParametrizedSSM(B, U, model.G, Q, Z, A, model.H, R, x1, V1)
-    params = SSMParameters(B_params, U_params, Q_params, Z_params, A_params, R_params, x1_params, V1_params)
+    pmodel = ParametrizedSSM(A, Q, C, R, x1, P1, B=B, D=D)
+    params = SSMParameters(A_params, B_params, Q_params, C_params, D_params, R_params, x1_params, V1_params)
     fit(y, pmodel, params, u=u, eps=eps, niter=niter)
 
 end #fit
