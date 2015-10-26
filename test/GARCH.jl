@@ -1,5 +1,5 @@
 using Base.Test
-using GARCH
+using TimeModels
 
 filename = Pkg.dir("GARCH", "test","data","SPY.csv")
 close = readcsv(filename,Float64)[:,2]
