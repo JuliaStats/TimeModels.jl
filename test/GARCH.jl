@@ -1,5 +1,6 @@
 using FactCheck
 using TimeModels
+using TimeModels.GARCH
 
 facts("GARCH") do
     context("Consistency with R's fGarch") do

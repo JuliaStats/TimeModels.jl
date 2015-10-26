@@ -3,7 +3,7 @@ module TimeModels
 using Base.Dates
 using Distributions
 using StatsBase
-using TimeSeries 
+using TimeSeries
 using Optim
 
 import Base: show
@@ -11,18 +11,15 @@ import Base: show
 export
   # Kalman exports
   StateSpaceModel,
-  KalmanFiltered, 
+  KalmanFiltered,
   KalmanSmoothed,
   simulate,
   kalman_filter,
   kalman_smooth,
-  fit, 
+  fit,
   # ARIMA exports
   arima_statespace,
   arima,
-  # GARCH exports
-  garchFit,
-  predict,
   # diagnostic tests exports
   jbtest
 
@@ -39,4 +36,4 @@ include("GARCH.jl")
 # Tests
 include("diagnostic_tests.jl")
 
-end 
+end

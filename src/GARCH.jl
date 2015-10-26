@@ -2,7 +2,10 @@
 # Copyright 2013 Andrey Kolev
 # Distributed under MIT license (see LICENSE.md)
 
+module GARCH
 using NLopt, Distributions
+
+export garchFit, predict
 
 type GarchFit
     data::Vector
@@ -110,3 +113,5 @@ function garchFit(y::Vector)
     tval = minx ./ secoef
     return GarchFit(y, minx, -0.5 * (T - 1) * log(2π) - 0.5 * minf, ret, converged, sqrt(h), H, cvar, secoef, tval)
 end
+
+end #GARCH
