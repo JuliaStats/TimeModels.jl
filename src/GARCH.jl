@@ -62,15 +62,25 @@ function cdHessian(par, LLH)
   H
 end
 
+
+function calculateVolatilityProcess(ɛ²::Vector, α₀, α₁, β₁)
+    h = similar(ɛ²)
+    h[1] = mean(ɛ²)
+    for i = 2:length(ɛ²)
+        h[i] = α₀ + α₁ * ɛ²[i-1] + β₁ * h[i-1]
+    end
+    return h
+end
+
+
 function garchLLH(rets::Vector, x::Vector)
   rets2   = rets.^2;
   T = length(rets);
   ht = zeros(T);
   omega,alpha,beta = x;
-  ht[1] = sum(rets2)/T;
-  for i=2:T
-    ht[i] = omega + alpha*rets2[i-1] + beta * ht[i-1];
-  end
+
+    ht = calculateVolatilityProcess(rets2, omega, alpha, beta)
+
   -0.5*(T-1)*log(2*pi)-0.5*sum( log(ht) + (rets./sqrt(ht)).^2 );
 end
 
@@ -78,12 +88,9 @@ function predict(fit::GarchFit)
  omega, alpha, beta = fit.params;
  rets = fit.data
  rets2   = rets.^2;
- T = length(rets);
- ht    = zeros(T);
- ht[1] = sum(rets2)/T;
- for i=2:T
-    ht[i] = omega + alpha*rets2[i-1] + beta * ht[i-1];
- end
+
+    ht = calculateVolatilityProcess(rets2, omega, alpha, beta)
+
  sqrt(omega + alpha*rets2[end] + beta*ht[end]);
 end
 
@@ -93,10 +100,9 @@ function garchFit(rets::Vector)
   ht = zeros(T);
   function garchLike(x::Vector, grad::Vector)
     omega,alpha,beta = x;
-    ht[1] = sum(rets2)/T;
-    for i=2:T
-      ht[i] = omega + alpha*rets2[i-1] + beta * ht[i-1];
-    end
+
+        ht = calculateVolatilityProcess(rets2, omega, alpha, beta)
+
     sum( log(ht) + (rets./sqrt(ht)).^2 );
   end
   opt = Opt(:LN_SBPLX, 3)
