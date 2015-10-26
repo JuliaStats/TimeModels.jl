@@ -18,23 +18,24 @@ type GarchFit
 end
 
 function Base.show(io::IO ,fit::GarchFit)
-  pnorm(x) = 0.5 * (1 + erf(x / sqrt(2)))
-  prt(x) = 2 * (1 - pnorm(abs(x)))
-  @printf io "Fitted garch model \n"
-  @printf io " * Coefficient(s): \tomega \t\talpha \t\tbeta\n"
-  @printf io "   \t\t\t%f\t%f\t%f\n" fit.params[1] fit.params[2] fit.params[3]
-  @printf io " * Log Likelihood: %f\n" fit.llh
-  @printf io " * Converged: %s\n" fit.converged
-  @printf io " * Solver status: %s\n\n" fit.status
-  println(io," * Standardised Residuals Tests:")
-  println(io,"   \t\t\t\tStatistic\tp-Value")
-  jbstat, jbp = jbtest(fit.data./fit.sigma);
-  @printf io "   Jarque-Bera Test\t\U1D6D8\u00B2\t%.6f\t%.6f\n\n" jbstat jbp
-  println(io," * Error Analysis:")
-  println(io,"   \t\tEstimate\t\Std.Error\tt value \tPr(>|t|)")
-  @printf io "   omega\t%f\t%f\t%f\t%f\n" fit.params[1] fit.secoef[1] fit.tval[1] prt(fit.tval[1])
-  @printf io "   alpha\t%f\t%f\t%f\t%f\n" fit.params[2] fit.secoef[2] fit.tval[2] prt(fit.tval[2])
-  @printf io "   beta \t%f\t%f\t%f\t%f\n"  fit.params[3] fit.secoef[3] fit.tval[3] prt(fit.tval[3])
+    pnorm(x) = 0.5 * (1 + erf(x / sqrt(2)))
+    prt(x) = 2 * (1 - pnorm(abs(x)))
+    jbstat, jbp = jbtest(fit.data./fit.sigma)
+
+    @printf io "Fitted garch model \n"
+    @printf io " * Coefficient(s):    %-15s%-15s%-15s\n" "omega" "alpha" "beta"
+    @printf io "%-22s%-15.5g%-15.5g%-15.5g\n" "" fit.params[1] fit.params[2] fit.params[3]
+    @printf io " * Log Likelihood: %.5g\n" fit.llh
+    @printf io " * Converged: %s\n" fit.converged
+    @printf io " * Solver status: %s\n\n" fit.status
+    @printf io " * Standardised Residuals Tests:\n"
+    @printf io "   %-26s%-15s%-15s\n" "" "Statistic" "tp-Value"
+    @printf io "   %-21s%-5s%-15.5g%-15.5g\n\n" "Jarque-Bera Test" "χ²" jbstat jbp
+    @printf io " * Error Analysis:\n"
+    @printf io "   %-7s%-15s%-15s%-15s%-15s\n" "" "Estimate" "Std.Error" "t value" "Pr(>|t|)"
+    @printf io "   %-7s%-15.5g%-15.5g%-15.5g%-15.5g\n" "omega" fit.params[1] fit.secoef[1] fit.tval[1] prt(fit.tval[1])
+    @printf io "   %-7s%-15.5g%-15.5g%-15.5g%-15.5g\n" "alpha" fit.params[2] fit.secoef[2] fit.tval[2] prt(fit.tval[2])
+    @printf io "   %-7s%-15.5g%-15.5g%-15.5g%-15.5g\n" "beta" fit.params[3] fit.secoef[3] fit.tval[3] prt(fit.tval[3])
 end
 
 function cdHessian(par, LLH)
