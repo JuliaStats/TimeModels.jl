@@ -2,6 +2,8 @@
 # Copyright 2013 Andrey Kolev
 # Distributed under MIT license (see LICENSE.md)
 
+using NLopt, Distributions
+
 type GarchFit
   data::Vector
   params::Vector
@@ -16,8 +18,8 @@ type GarchFit
 end
 
 function Base.show(io::IO ,fit::GarchFit)
-  pnorm(x) = 0.5*(1+erf(x/sqrt(2)))
-  prt(x) = 2*(1-pnorm(abs(x)))
+  pnorm(x) = 0.5 * (1 + erf(x / sqrt(2)))
+  prt(x) = 2 * (1 - pnorm(abs(x)))
   @printf io "Fitted garch model \n"
   @printf io " * Coefficient(s): \tomega \t\talpha \t\tbeta\n"
   @printf io "   \t\t\t%f\t%f\t%f\n" fit.params[1] fit.params[2] fit.params[3]
@@ -26,7 +28,7 @@ function Base.show(io::IO ,fit::GarchFit)
   @printf io " * Solver status: %s\n\n" fit.status
   println(io," * Standardised Residuals Tests:")
   println(io,"   \t\t\t\tStatistic\tp-Value")
-  jbstat,jbp = jbtest(fit.data./fit.sigma);
+  jbstat, jbp = jbtest(fit.data./fit.sigma);
   @printf io "   Jarque-Bera Test\t\U1D6D8\u00B2\t%.6f\t%.6f\n\n" jbstat jbp
   println(io," * Error Analysis:")
   println(io,"   \t\tEstimate\t\Std.Error\tt value \tPr(>|t|)")
@@ -35,15 +37,15 @@ function Base.show(io::IO ,fit::GarchFit)
   @printf io "   beta \t%f\t%f\t%f\t%f\n"  fit.params[3] fit.secoef[3] fit.tval[3] prt(fit.tval[3])
 end
 
-function cdHessian(par,LLH)
+function cdHessian(par, LLH)
   eps = 1e-4 * par
   n = length(par)
   H = zeros(n,n)
   for(i = 1:n)
     for(j = 1:n)
-      x1 = copy(par) 
+      x1 = copy(par)
       x1[i] += eps[i]
-      x1[j] += eps[j] 
+      x1[j] += eps[j]
       x2 = copy(par)
       x2[i] += eps[i]
       x2[j] -= eps[j]
@@ -59,9 +61,9 @@ function cdHessian(par,LLH)
   H
 end
 
-function garchLLH(rets::Vector,x::Vector)
+function garchLLH(rets::Vector, x::Vector)
   rets2   = rets.^2;
-  T = length(rets); 
+  T = length(rets);
   ht = zeros(T);
   omega,alpha,beta = x;
   ht[1] = sum(rets2)/T;
@@ -75,7 +77,7 @@ function predict(fit::GarchFit)
  omega, alpha, beta = fit.params;
  rets = fit.data
  rets2   = rets.^2;
- T = length(rets); 
+ T = length(rets);
  ht    = zeros(T);
  ht[1] = sum(rets2)/T;
  for i=2:T
@@ -84,10 +86,9 @@ function predict(fit::GarchFit)
  sqrt(omega + alpha*rets2[end] + beta*ht[end]);
 end
 
-function garchFit(data::Vector)
-  rets = data
+function garchFit(rets::Vector)
   rets2   = rets.^2;
-  T = length(rets); 
+  T = length(rets);
   ht = zeros(T);
   function garchLike(x::Vector, grad::Vector)
     omega,alpha,beta = x;
@@ -97,25 +98,15 @@ function garchFit(data::Vector)
     end
     sum( log(ht) + (rets./sqrt(ht)).^2 );
   end
-  opt = Opt(:LN_SBPLX,3)
-  lower_bounds!(opt,[1e-10, 0.0, 0.0])
-  upper_bounds!(opt,[1; 0.3; 0.99])
+  opt = Opt(:LN_SBPLX, 3)
+  lower_bounds!(opt, [1e-10, 0.0, 0.0])
+  upper_bounds!(opt, [1; 0.3; 0.99])
   min_objective!(opt, garchLike)
-  (minf,minx,ret) = Optim.optimize(opt, [1e-5, 0.09, 0.89])
+  (minf,minx,ret) = NLopt.optimize(opt, [1e-5, 0.09, 0.89])
   converged = minx[1]>0 && all(minx[2:3].>=0) && sum(minx[2:3])<1.0
-  H = cdHessian(minx,x->garchLLH(rets,x))
+  H = cdHessian(minx, x->garchLLH(rets, x))
   cvar = -inv(H)
   secoef = sqrt(diag(cvar))
   tval = minx./secoef
-  out = GarchFit(data, minx, -0.5*(T-1)*log(2*pi)-0.5*minf, ret, converged, sqrt(ht),H,cvar,secoef,tval)
+  out = GarchFit(rets, minx, -0.5*(T-1)*log(2*pi)-0.5*minf, ret, converged, sqrt(ht), H, cvar, secoef, tval)
 end
-
-# function garchPkgTest()
-#   println("Running GARCH package test...")
-#   try
-#     include(Pkg.dir("GARCH", "test","GARCHtest.jl"))
-#     println("All tests passed!")
-#   catch err
-#     throw(err)
-#   end
-# end

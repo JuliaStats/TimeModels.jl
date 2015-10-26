@@ -1,12 +1,13 @@
-using Base.Test
+using FactCheck
 using TimeModels
 
-filename = Pkg.dir("GARCH", "test","data","SPY.csv")
-close = readcsv(filename,Float64)[:,2]
-ret = diff(log(close))
-ret = ret - mean(ret)
-fit = garchFit(ret)
-param = [2.469347e-06, 1.142268e-01, 8.691734e-01] #R fGarch garch(1,1) estimated params
-@test_approx_eq_eps(fit.params,param,1e-3)
-
-
+facts("GARCH") do
+    context("Consistency with R's fGarch") do
+        filename = Pkg.dir("TimeModels", "test", "data", "random process.csv")
+        ret = readcsv(filename)[:, 1]
+        ret = ret .- mean(ret)
+        fit = garchFit(ret)
+        param = [2.469347e-06, 1.142268e-01, 8.691734e-01] #R fGarch garch(1,1) estimated params
+        @fact fit.params --> roughly(param, atol=1e-3)
+    end
+end
