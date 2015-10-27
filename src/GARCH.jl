@@ -7,23 +7,23 @@ using NLopt, Distributions
 
 export fit_GARCH, predict
 
-type GarchFit
-    data::Vector
-    params::Vector
+immutable GarchFit
+    data::Vector{Float64}
+    params::Vector{Float64}
     llh::Float64
     status::Symbol
     converged::Bool
-    sigma::Vector
+    sigma::Vector{Float64}
     hessian::Array{Float64,2}
     cvar::Array{Float64,2}
-    secoef::Vector
-    tval::Vector
+    secoef::Vector{Float64}
+    tval::Vector{Float64}
 end
 
-function Base.show(io::IO ,fit::GarchFit)
+function Base.show(io::IO, fit::GarchFit)
     pnorm(x) = 0.5 * (1 + erf(x / sqrt(2)))
     prt(x) = 2 * (1 - pnorm(abs(x)))
-    jbstat, jbp = jbtest(fit.data./fit.sigma)
+    jbstat, jbp = jbtest(fit.data ./ fit.sigma)
 
     @printf io "Fitted garch model \n"
     @printf io " * Coefficient(s):    %-15s%-15s%-15s\n" "α₀" "α₁" "β₁"
