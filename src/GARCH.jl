@@ -5,7 +5,7 @@
 module GARCH
 using NLopt, Distributions
 
-export garchFit, predict
+export fit_GARCH, predict
 
 type GarchFit
     data::Vector
@@ -66,7 +66,7 @@ function cdHessian(par, LLH)
 end
 
 
-function calculateVolatilityProcess(ɛ²::Vector, α₀, α₁, β₁)
+function calculate_volatility_process(ɛ²::Vector, α₀, α₁, β₁)
     h = similar(ɛ²)
     h[1] = mean(ɛ²)
     for i = 2:length(ɛ²)
@@ -76,11 +76,11 @@ function calculateVolatilityProcess(ɛ²::Vector, α₀, α₁, β₁)
 end
 
 
-function garchLLH(y::Vector, x::Vector)
+function fit_GARCH_LLH(y::Vector, x::Vector)
     ɛ² = y .^ 2
     T = length(y)
     α₀, α₁, β₁ = x
-    h = calculateVolatilityProcess(ɛ², α₀, α₁, β₁)
+    h = calculate_volatility_process(ɛ², α₀, α₁, β₁)
     return -0.5 * (T - 1) * log(2π) - 0.5 * sum(log(h) + (y ./ sqrt(h)) .^ 2)
 end
 
@@ -88,26 +88,26 @@ function predict(fit::GarchFit)
     α₀, α₁, β₁ = fit.params
     y = fit.data
     ɛ² = y.^2
-    h = calculateVolatilityProcess(ɛ², α₀, α₁, β₁)
+    h = calculate_volatility_process(ɛ², α₀, α₁, β₁)
     return sqrt(α₀ + α₁ * ɛ²[end] + β₁ * h[end])
 end
 
-function garchFit(y::Vector)
+function fit_GARCH(y::Vector)
     ɛ² = y.^2
     T = length(y)
     h = zeros(T)
-    function garchLike(x::Vector, grad::Vector)
+    function fit_GARCH_like(x::Vector, grad::Vector)
         α₀, α₁, β₁ = x
-        h = calculateVolatilityProcess(ɛ², α₀, α₁, β₁)
+        h = calculate_volatility_process(ɛ², α₀, α₁, β₁)
         sum(log(h) + (y ./ sqrt(h)) .^ 2)
     end
     opt = Opt(:LN_SBPLX, 3)
     lower_bounds!(opt, [1e-10, 0.0, 0.0])
     upper_bounds!(opt, [1, 0.3, 0.99])
-    min_objective!(opt, garchLike)
+    min_objective!(opt, fit_GARCH_like)
     (minf, minx, ret) = NLopt.optimize(opt, [1e-5, 0.09, 0.89])
     converged = minx[1] > 0 && all(minx[2:3] .>= 0) && sum(minx[2:3]) < 1.0
-    H = cdHessian(minx, x -> garchLLH(y, x))
+    H = cdHessian(minx, x -> fit_GARCH_LLH(y, x))
     cvar = -inv(H)
     secoef = sqrt(diag(cvar))
     tval = minx ./ secoef
