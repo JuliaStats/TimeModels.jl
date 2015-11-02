@@ -8,7 +8,7 @@ using NLopt, Distributions
 export fit_GARCH, predict
 
 immutable GarchFit
-    data::Vector{Float64}
+    ɛ::Vector{Float64}
     params::Vector{Float64}
     llh::Float64
     status::Symbol
@@ -23,7 +23,7 @@ end
 function Base.show(io::IO, fit::GarchFit)
     pnorm(x) = 0.5 * (1 + erf(x / sqrt(2)))
     prt(x) = 2 * (1 - pnorm(abs(x)))
-    jbstat, jbp = jbtest(fit.data ./ fit.sigma)
+    jbstat, jbp = jbtest(fit.ɛ ./ fit.sigma)
 
     @printf io "Fitted garch model \n"
     @printf io " * Coefficient(s):    %-15s%-15s%-15s\n" "α₀" "α₁" "β₁"
@@ -76,30 +76,31 @@ function calculate_volatility_process(ɛ²::Vector, α₀, α₁, β₁)
 end
 
 
-function fit_GARCH_LLH(y::Vector, x::Vector)
-    ɛ² = y .^ 2
-    T = length(y)
+function fit_GARCH_LLH(ɛ::Vector, x::Vector)
+    ɛ² = ɛ .^ 2
+    T = length(ɛ)
     α₀, α₁, β₁ = x
     h = calculate_volatility_process(ɛ², α₀, α₁, β₁)
-    return -0.5 * (T - 1) * log(2π) - 0.5 * sum(log(h) + (y ./ sqrt(h)) .^ 2)
+    return -0.5 * (T - 1) * log(2π) - 0.5 * sum(log(h) + (ɛ ./ sqrt(h)) .^ 2)
 end
 
 function predict(fit::GarchFit)
     α₀, α₁, β₁ = fit.params
-    y = fit.data
-    ɛ² = y.^2
+    ɛ = fit.ɛ
+    ɛ² = ɛ.^2
     h = calculate_volatility_process(ɛ², α₀, α₁, β₁)
     return sqrt(α₀ + α₁ * ɛ²[end] + β₁ * h[end])
 end
 
 function fit_GARCH(y::Vector)
-    ɛ² = y.^2
-    T = length(y)
+    ɛ = y .- mean(y)
+    ɛ² = ɛ .^ 2
+    T = length(ɛ)
     h = zeros(T)
     function fit_GARCH_like(x::Vector, grad::Vector)
         α₀, α₁, β₁ = x
         h = calculate_volatility_process(ɛ², α₀, α₁, β₁)
-        sum(log(h) + (y ./ sqrt(h)) .^ 2)
+        sum(log(h) + (ɛ ./ sqrt(h)) .^ 2)
     end
     opt = Opt(:LN_SBPLX, 3)
     lower_bounds!(opt, [1e-10, 0.0, 0.0])
@@ -107,11 +108,11 @@ function fit_GARCH(y::Vector)
     min_objective!(opt, fit_GARCH_like)
     (minf, minx, ret) = NLopt.optimize(opt, [1e-5, 0.09, 0.89])
     converged = minx[1] > 0 && all(minx[2:3] .>= 0) && sum(minx[2:3]) < 1.0
-    H = cdHessian(minx, x -> fit_GARCH_LLH(y, x))
+    H = cdHessian(minx, x -> fit_GARCH_LLH(ɛ, x))
     cvar = -inv(H)
     secoef = sqrt(diag(cvar))
     tval = minx ./ secoef
-    return GarchFit(y, minx, -0.5 * (T - 1) * log(2π) - 0.5 * minf, ret, converged, sqrt(h), H, cvar, secoef, tval)
+    return GarchFit(ɛ, minx, -0.5 * (T - 1) * log(2π) - 0.5 * minf, ret, converged, sqrt(h), H, cvar, secoef, tval)
 end
 
 end #GARCH
