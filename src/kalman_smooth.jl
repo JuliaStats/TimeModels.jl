@@ -140,16 +140,16 @@ function lag1_smooth(y::Array, u::Array, m::StateSpaceModel)
     B_stack(t) = [m.B(t); zeros(m.nx, m.nu)]
     V_stack(t) = [m.V(t) zeros(m.nx, m.nx); zeros(m.nx, 2*m.nx)]
     C_stack(t) = [m.C(t) zeros(m.ny, m.nx)]
-    x1_stack   = [m.x1; zeros(model.x1)]
+    x1_stack   = [m.x1; zeros(m.x1)]
     P1_stack   = [m.P1 zeros(m.nx, m.nx); zeros(m.nx, 2*m.nx)]
-    stack_model = StateSpaceModel(A_stack, B_stack, V_stack,
-                                  C_stack, model.D, model.W, x1_stack, V1_stack)
+    stack_model = StateSpaceModel(A_stack, V_stack, C_stack, m.W,
+                                      x1_stack, P1_stack, B=B_stack, D=m.D)
 
-    stack_smoothed = smooth(y, stack_model, u=u)
-    x     = stack_smoothed.x[:, 1:model.nx]
-    V     = stack_smoothed.V[1:model.nx, 1:model.nx, :]
-    Vlag1 = stack_smoothed.V[1:model.nx, (model.nx+1):end]
-    return x, V, Vlag1, stack_smoothed.loglik
+    stack_smoothed = kalman_smooth(y, stack_model, u=u)
+    x     = stack_smoothed.smoothed[:, 1:m.nx]'
+    P     = stack_smoothed.error_cov[1:m.nx, 1:m.nx, :]
+    Plag1 = stack_smoothed.error_cov[1:m.nx, (m.nx+1):end, :]
+    return x, P, Plag1, stack_smoothed.loglik
 
 end #function
 

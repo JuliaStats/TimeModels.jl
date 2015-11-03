@@ -9,20 +9,26 @@ using Optim
 import Base: show
 
 export
-  # Kalman exports
-  StateSpaceModel,
-  KalmanFiltered, 
-  KalmanSmoothed,
-  simulate,
-  kalman_filter,
-  kalman_smooth,
-  fit, 
+  # General state space model 
+  StateSpaceModel, simulate,
+
+  #Kalman
+  kalman_filter, KalmanFiltered,
+  kalman_smooth, KalmanSmoothed,
+
+  # Parameter fitting
+  ParametrizedMatrix,
+  parametrize_full, parametrize_diag, parametrize_none, 
+  ParametrizedSSM, SSMParameters, fit, 
+
   # ARIMA exports
   arima_statespace,
   arima,
+
   # GARCH exports
   garchFit,
   predict,
+
   # diagnostic tests exports
   jbtest
 

@@ -50,23 +50,24 @@ StateSpaceModel{T}(A::Matrix{T}, V::Matrix{T}, C::Matrix{T}, W::Matrix{T},
 	  StateSpaceModel{T}(_->A, _->B, _->V, _->C, _->D, _->W, x1, P1)
 
 function show{T}(io::IO, mod::StateSpaceModel{T})
-    dx, dy = length(mod.x1), size(mod.G, 1)
+    dx, dy = mod.nx, mod.ny 
     println("StateSpaceModel{$T}, $dx-D process x $dy-D observations")
-    println("Process evolution matrix F:")
-    show(mod.F)
+    println("Process evolution matrix A:")
+    show(mod.A(1))
     println("\n\nControl input matrix B:")
-    show(mod.B)
+    show(mod.B(1))
     println("\n\nProcess error covariance V:")
-    show(mod.V)
-    println("\n\nObservation matrix G:")
-    show(mod.G)
+    show(mod.V(1))
+    println("\n\nObservation matrix C:")
+    show(mod.C(1))
     println("\n\nFeed-forward matrix D:")
-    show(mod.D)
+    show(mod.D(1))
     println("\n\nObseration error covariance W:")
-    show(mod.W)
+    show(mod.W(1))
 end
 
 # Time-independent parametrized matrix type
+# TODO: A more general ParametrizedArray (allowing vectors) could be preferable
 immutable ParametrizedMatrix{T<:Real}
 
     f::Vector{T}
@@ -192,18 +193,18 @@ immutable ParametrizedSSM{T} <: AbstractStateSpaceModel{T}
 
 end #ParametrizedSSM
 
-ParametrizedSSM{T}(A2::ParametrizedMatrix{T}, Q::ParametrizedMatrix,
-                          C2::ParametrizedMatrix{T}, R::ParametrizedMatrix,
+ParametrizedSSM{T}(A2::ParametrizedMatrix{T}, Q::ParametrizedMatrix{T},
+                          C2::ParametrizedMatrix{T}, R::ParametrizedMatrix{T},
                           x1::ParametrizedMatrix{T}, P1::ParametrizedMatrix{T};
-                          A1::Function=_->eye(size(A2(1),1)), A3::Function=_->eye(size(A2(1),2)),
+                          A1::Function=_->eye(size(A2,1)), A3::Function=_->eye(size(A2,2)),
                           B1::Function=_->eye(size(A1(1),1)),
                           B2::ParametrizedMatrix{T}=parametrize_none(zeros(size(A1(1),1), 1))[1],
                           G::Function=_->eye(size(A1(1),1)),
-                          C1::Function=_->eye(size(C2(1), 1)), C3::Function=_->eye(size(C2(1),2)),
+                          C1::Function=_->eye(size(C2, 1)), C3::Function=_->eye(size(C2,2)),
                           D1::Function=_->eye(size(C1(1),1)),
                           D2::ParametrizedMatrix{T}=parametrize_none(zeros(size(C1(1),1), 1))[1],
-                          H::Function=_->eye(size(A1(1),1))) =
-          ParametrizedSSM(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, P1)
+                          H::Function=_->eye(size(C1(1),1))) =
+          ParametrizedSSM{T}(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, P1)
 
 # State space model parameters
 immutable SSMParameters{T}
@@ -224,19 +225,19 @@ immutable SSMParameters{T}
 
 end #SSMParameters
 
-SSMParameters{T}(A::Vector{T}, Q::Vector{T}, C::Vector{T}, R::Vector{T},
-                  x1::Vector{T}, P1::Vector{T};
-                  B::Vector{T}=T[], D::Vector{T}=T[]) =
+SSMParameters{T}(_::T; A::Vector{T}=T[], B::Vector{T}=T[], Q::Vector{T}=T[],
+                  C::Vector{T}=T[], D::Vector{T}=T[], R::Vector{T}=T[],
+                  x1::Vector{T}=T[], P1::Vector{T}=T[]) =
               SSMParameters{T}(A, B, Q, C, D, R, x1, P1)
 
-function call(m::ParametrizedSSM, p::SSMParameters)
+function Base.call(m::ParametrizedSSM, p::SSMParameters)
     A(t) = m.A1(t) * m.A2(p.A) * m.A3(t)
     B(t) = m.B1(t) * m.B2(p.B)
     V(t) = m.G(t) * m.Q(p.Q) * m.G(t)'
     C(t) = m.C1(t) * m.C2(p.C) * m.C3(t)
     D(t) = m.D1(t) * m.D2(p.D)
     W(t) = m.H(t) * m.R(p.R) * m.H(t)'
-    x1 = m.x1(p.x1)
+    x1 = vec(m.x1(p.x1))
     P1 = m.P1(p.P1)
     return StateSpaceModel(A, V, C, W, x1, P1, B=B, D=D)
 end #call
@@ -264,17 +265,17 @@ end #confirm_matrix_sizes
 
 function confirm_matrix_sizes(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, P1)
 
-    nx = size(A1(1), 1)
-    ny = size(C1(1), 1)
-    nu = size(D2(1), 2)
+    nx = size(A1, 1)
+    ny = size(C1, 1)
+    nu = size(D2, 2)
 
-    na1, na2  = size(A1(1), 2), size(A2(1), 2)
-    nb        = size(B1(1), 2)
-    nc1, nc2  = size(C1(1), 2), size(C2(1), 2)
-    nd        = size(D1(1), 2)
+    na1, na2  = size(A1, 2), size(A2, 2)
+    nb        = size(B1, 2)
+    nc1, nc2  = size(C1, 2), size(C2, 2)
+    nd        = size(D1, 2)
 
-    nq = size(Q(1), 1)
-    nr = size(R(1), 1)
+    nq = size(Q, 1)
+    nr = size(R, 1)
 
     @assert size(A1) == (nx, na1)
     @assert size(A2) == (na1, na2)
@@ -303,18 +304,20 @@ function confirm_matrix_sizes(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R
 
 end #confirm_matrix_sizes
 
+"
+Generates a realization of a state space model.
 
+Arguments:
+  model : StateSpaceModel
+  Model defining the process
+
+  n : Int
+  Number of steps to simulate.
+
+  u : Array (optional)
+  n x nu array of exogenous inputs
+"
 function simulate(model::StateSpaceModel, n::Int; u::Array=zeros(n, model.nu))
-    # Generates a realization of a state space model.
-    #
-    # Arguments:
-    # model : StateSpaceModel
-    #	Model defining the process
-    # n : Int
-    #	Number of steps to simulate.
-    # u : Array (optional)
-    # n x nu array of exogenous inputs
-
     @assert size(u, 1) == n
     @assert size(u, 2) == model.nu
 

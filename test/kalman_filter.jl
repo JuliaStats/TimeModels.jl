@@ -8,17 +8,6 @@ function build_model()
     W = diagm([8.0, 2.5, 4.0])
     x0 = randn(1)
     P0 = diagm([1e7])
-    mod1 = StateSpaceModel(F, V, G, W, x0, P0)
-end
-
-# Test model-fitting
-function build(theta)
-    F = diagm(theta[1])
-    V = diagm(exp(theta[2]))
-    G = reshape(theta[3:5], 3, 1)
-    W = diagm(exp(theta[6:8]))
-    x0 = [theta[9]]
-    P0 = diagm(1e7)
     StateSpaceModel(F, V, G, W, x0, P0)
 end
 
@@ -62,12 +51,6 @@ facts("Kalman Filter") do
             smooth2 = kalman_smooth(y, mod1)
 
             @fact smooth.smoothed --> roughly(smooth2.smoothed, atol=1e-2)
-        end
-
-        context("Model fitting") do
-            mod1 = build_model()
-            x, y = simulate(mod1, 100)
-            fit(y, build, zeros(9))
         end
 
         context("Missing data") do

@@ -3,5 +3,6 @@
 using FactCheck, TimeModels
 
 include("kalman_filter.jl")
+include("parameter_estimation.jl")
 
 exitstatus()
