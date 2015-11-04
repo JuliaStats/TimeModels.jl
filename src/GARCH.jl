@@ -92,8 +92,7 @@ function predict(fit::GarchFit)
     return sqrt(α₀ + α₁ * ɛ²[end] + β₁ * h[end])
 end
 
-function fit_GARCH(y::Vector)
-    ɛ = y .- mean(y)
+function fit_GARCH(ɛ::Vector)
     ɛ² = ɛ .^ 2
     T = length(ɛ)
     h = zeros(T)
