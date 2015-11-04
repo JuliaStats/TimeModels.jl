@@ -9,6 +9,7 @@ export fit_GARCH, predict
 
 immutable GarchFit
     ɛ::Vector{Float64}
+    ɛ²::Vector{Float64}
     params::Vector{Float64}
     llh::Float64
     status::Symbol
@@ -76,30 +77,28 @@ function calculate_volatility_process(ɛ²::Vector, α₀, α₁, β₁)
 end
 
 
-function fit_GARCH_LLH(ɛ::Vector, x::Vector)
-    ɛ² = ɛ .^ 2
-    T = length(ɛ)
+function fit_GARCH_LLH(ɛ²::Vector, x::Vector)
+    T = length(ɛ²)
     α₀, α₁, β₁ = x
     h = calculate_volatility_process(ɛ², α₀, α₁, β₁)
-    return -0.5 * (T - 1) * log(2π) - 0.5 * sum(log(h) + (ɛ ./ sqrt(h)) .^ 2)
+    return -0.5 * (T - 1) * log(2π) - 0.5 * sum(log(h) .+ ɛ² ./ h)
 end
 
 function predict(fit::GarchFit)
     α₀, α₁, β₁ = fit.params
-    ɛ = fit.ɛ
-    ɛ² = ɛ.^2
+    ɛ² = fit.ɛ²
     h = calculate_volatility_process(ɛ², α₀, α₁, β₁)
     return sqrt(α₀ + α₁ * ɛ²[end] + β₁ * h[end])
 end
 
 function fit_GARCH(ɛ::Vector)
     ɛ² = ɛ .^ 2
-    T = length(ɛ)
+    T = length(ɛ²)
     h = zeros(T)
     function fit_GARCH_like(x::Vector, grad::Vector)
         α₀, α₁, β₁ = x
         h = calculate_volatility_process(ɛ², α₀, α₁, β₁)
-        sum(log(h) + (ɛ ./ sqrt(h)) .^ 2)
+        sum(log(h) .+ ɛ² ./ h)
     end
     opt = Opt(:LN_SBPLX, 3)
     lower_bounds!(opt, [1e-10, 0.0, 0.0])
@@ -107,11 +106,11 @@ function fit_GARCH(ɛ::Vector)
     min_objective!(opt, fit_GARCH_like)
     (minf, minx, ret) = NLopt.optimize(opt, [1e-5, 0.09, 0.89])
     converged = minx[1] > 0 && all(minx[2:3] .>= 0) && sum(minx[2:3]) < 1.0
-    H = cdHessian(minx, x -> fit_GARCH_LLH(ɛ, x))
+    H = cdHessian(minx, x -> fit_GARCH_LLH(ɛ², x))
     cvar = -inv(H)
     secoef = sqrt(diag(cvar))
     tval = minx ./ secoef
-    return GarchFit(ɛ, minx, -0.5 * (T - 1) * log(2π) - 0.5 * minf, ret, converged, sqrt(h), H, cvar, secoef, tval)
+    return GarchFit(ɛ, ɛ², minx, -0.5 * (T - 1) * log(2π) - 0.5 * minf, ret, converged, sqrt(h), H, cvar, secoef, tval)
 end
 
 end #GARCH
