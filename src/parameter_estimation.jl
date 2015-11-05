@@ -24,19 +24,35 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
     u = u'
 
     I_nx = eye(pmodel.nx)
+    I0_nx = 0I_nx
     I_ny = eye(pmodel.ny)
+    I0_ny = 0I_ny
     I_nu = eye(pmodel.nu)
 
-    function em_kernel!{T}(params::SSMParameters{T})
+    # Requirement: zeros-rows in G and H remain consistent
+    x_deterministic = all(pmodel.G(1) .== 0, 2)
+    all_x_deterministic = all(x_deterministic)
+    y_deterministic = all(pmodel.H(1) .== 0, 2)
+    all_y_deterministic = all(y_deterministic)
 
-        estimate_A   = length(params.A) > 0
-        estimate_B   = length(params.B) > 0
-        estimate_Q   = length(params.Q) > 0
-        estimate_C   = length(params.C) > 0
-        estimate_D   = length(params.D) > 0
-        estimate_R   = length(params.R) > 0
-        estimate_x1  = length(params.x1) > 0
-        estimate_P1  = length(params.P1) > 0
+    if any(x_deterministic)
+        OQ0, OQp = I_nx[find(x_deterministic), :], I_nx[find(!x_deterministic), :]
+        Id(M_t::Array{Int,2}) = diagm(OQ0' * all((OQ0 * M_t * OQp') .== 0, 2)[:])
+    else
+        Id(_::Array{Int,2}) = I0_nx
+    end
+
+    estimate_A   = length(params.A) > 0
+    estimate_B   = length(params.B) > 0
+    estimate_Q   = length(params.Q) > 0
+    estimate_C   = length(params.C) > 0
+    estimate_D   = length(params.D) > 0
+    estimate_R   = length(params.R) > 0
+    estimate_x1  = length(params.x1) > 0
+    estimate_P1  = length(params.P1) > 0
+
+
+    function em_kernel!{T}(params::SSMParameters{T})
 
         m = pmodel(params)
 
@@ -57,15 +73,15 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
         #tic()
 
         if estimate_A | estimate_B | estimate_Q
-            phi(t)  = (pmodel.G(t)' * pmodel.G(t)) \ pmodel.G(t)'
+            phi(t)  = (pmodel.G(t)' * pmodel.G(t)) \ pmodel.G(t)' #Can be moved out
             Qinv    = inv(pmodel.Q(params.Q))  
-            Q_      = phi(1)' * Qinv * phi(1)
+            Q_      = all_x_deterministic ? I0_nx : phi(1)' * Qinv * phi(1)
         end #if ABQ
 
         if estimate_B | estimate_C | estimate_D | estimate_R
-            xi(t) = (pmodel.H(t)' * pmodel.H(t)) \ pmodel.H(t)'
+            xi(t) = (pmodel.H(t)' * pmodel.H(t)) \ pmodel.H(t)' #Can be moved out
             Rinv  = inv(pmodel.R(params.R))
-            R_    = xi(1)' * Rinv * xi(1)
+            R_    = all_y_deterministic ? I0_ny : xi(1)' * Rinv * xi(1)
         end #if
 
         if estimate_x1
@@ -94,13 +110,10 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
         if estimate_A # A setup
             A_S1 = zeros(length(params.A), length(params.A))
             A_S2 = zeros(params.A)
-        end #if B
+        end #if A
 
         if estimate_B # B setup
-            deterministic = all(pmodel.G(1) .== 0, 2)
-            OQ0, OQp = I_nx[find(deterministic), :], I_nx[find(!deterministic), :]
-
-            pkp = kron(I_nu, pmodel.B1(t))
+            pkp = kron(I_nu, pmodel.B1(1))
             f_Bt = pkp * pmodel.B2.f
             D_Bt = pkp * pmodel.B2.D
 
@@ -111,13 +124,12 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
             Idt = I_nx
             A_  = I_nx
             f_  = B_kp * f_Bt * 0
-            D_  = B_kp * f_Dt * 0
-            M   = m.B(1) .!= 0 #Assumption: constant position of nonzero values in B
+            D_  = B_kp * D_Bt * 0
+            M   = 1 * (m.A(1) .!= 0) #Assumption: constant position of nonzero values in A
             M_t = copy(M)
             EX0 = exs[:, 1]
-            potential_deterministic_rows = all((OQ0 * M_t * OQp') .== 0, 2)[:]
 
-            Dt1 = ey - m.C(1) * (I - Idt) * ex - m.C(1) * Idt * (B_ * EX0 + f_) - Dut
+            Dt1 = ey - m.C(1) * (I - Idt) * ex - m.C(1) * Idt * (A_ * EX0 + f_) - Dut
             Dt2 = m.C(1) * Idt * D_
             Dt3 = zeros(pmodel.nx)
             Dt4 = DB * 0
@@ -129,7 +141,7 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
             B_S1 = Dt2' * R_ * Dt2
             B_S2 = Dt2' * R_ * Dt1
-        end #if
+        end #if B
 
         if estimate_Q # Q setup
             Q_S1 = zeros(length(params.Q), length(params.Q))
@@ -163,8 +175,8 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
             exx_prev  = exx
             exx       = Pt + ex * ex'
 
-            (estimate_A || estimate_B || estimate_Q) && (Q_ = phi(t)' * Qinv * phi(t))
-            (estimate_B || estimate_C || estimate_D || estimate_R) && (R_ = xi(t)' * Rinv * xi(t))
+            !all_x_deterministic && (estimate_A || estimate_B || estimate_Q) && (Q_ = phi(t)' * Qinv * phi(t))
+            !all_y_deterministic && (estimate_B || estimate_C || estimate_D || estimate_R) && (R_ = xi(t)' * Rinv * xi(t))
 
             if estimate_A || estimate_Q || estimate_C
 
@@ -228,19 +240,18 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
                 if estimate_B
 
-                    potential_deterministic_rows = all((OQ0 * M_t * OQp') .== 0, 2)[:]
-                    Idt = diagm(OQ0' * potential_deterministic_rows)
+                    Idt = Id(M_t)
                     B_kp = kron(ut', I_nx)
-                    B_ = At * Bt1_
-                    fB = B_kp * spU_f
-                    DB = B_kp * spU_D
+                    A_ = At * At1_
+                    fB = B_kp * f_Bt
+                    DB = B_kp * D_Bt
                     f_ = At * ft1_ + fB
                     D_ = At * Dt1_ + DB
 
-                    Dt1 = ey - Ct * (I - Idt) * ex - Ct * Idt * (B_ * EX0 + f_) - Dut
+                    Dt1 = ey - Ct * (I - Idt) * ex - Ct * Idt * (A_ * EX0 + f_) - Dut
                     Dt2 = Ct * Idt * D_
                     Dt3 = ex - At * (I - Idt1) * ex_prev -
-                                At * Idt1 * (Bt1_ * EX0 + ft1_) - fB
+                                At * Idt1 * (At1_ * EX0 + ft1_) - fB
                     Dt4 = DB + At * Idt1 * Dt1_
 
                     B_S1 += Dt4' * Q_ * Dt4 + Dt2' * R_ * Dt2
@@ -248,7 +259,7 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
                     t <= (pmodel.nx +1) ? M_t *= M : nothing
                     Idt1 = Idt
-                    Bt1_ = B_
+                    At1_ = A_
                     ft1_ = f_
                     Dt1_ = D_ 
 

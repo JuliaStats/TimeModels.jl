@@ -38,7 +38,7 @@ facts("Parameter Estimation") do
     context("Parameter estimation with constraints") do
 
         m, b, dt = 5, 2, .1
-        t = 0:dt:100
+        t = 0:dt:200
         y_true = m*t + b
 
         context("Without inputs") do
@@ -84,7 +84,42 @@ facts("Parameter Estimation") do
             )
             lm_params = SSMParameters(1., R=rand(3), D=randn(12))
             fitm_params, fitm = fit(y_noisy, lm, lm_params, u=input)
+            @fact fitm_params.D --> roughly(vec([1. 1 0 0; 1 0 1 0; 0 0 1 1]), atol=.1)
             @fact sqrt(fitm_params.R) --> roughly([s1, s2, s3], atol=.1)
+
+            y_noisy = [0 0 0;
+                  [input[:,1]+input[:,2] input[:,1]+input[:,3] input[:,3]+input[:,4]][1:end-1, :]] +
+                  [s1 s2 s3] .* randn(length(t), 3)
+
+            lm = ParametrizedSSM(
+                  parametrize_none(zeros(3,3))[1], #A
+                  parametrize_diag(ones(3))[1], #Q
+                  parametrize_none(eye(3))[1], #C
+                  parametrize_none(eye(1))[1], #R
+                  parametrize_none(zeros(3,1))[1], #x1
+                  parametrize_none(0.001*eye(3))[1], #P1
+                  B2=parametrize_none([1. 1 0 0; 1 0 1 0; 0 0 1 1])[1], #B
+                  H=_->zeros(3,1), #H
+                  D2=parametrize_none(zeros(3,4))[1], #D
+            )
+            lm_params = SSMParameters(1., Q=rand(3))
+            fitm_params, fitm = fit(y_noisy, lm, lm_params, u=input)
+            @fact sqrt(fitm_params.Q) --> roughly([s1, s2, s3], atol=.1)
+
+            lm = ParametrizedSSM(
+                  parametrize_none(zeros(3,3))[1], #A
+                  parametrize_none([s1 0. 0; 0 s2 0; 0 0 s3])[1], #Q
+                  parametrize_none(eye(3))[1], #C
+                  parametrize_none(eye(1))[1], #R
+                  parametrize_none(zeros(3,1))[1], #x1
+                  parametrize_none(0.001*eye(3))[1], #P1
+                  B2=parametrize_full(randn(3,4))[1], #B
+                  H=_->zeros(3,1), #H
+                  D2=parametrize_none(zeros(3,4))[1], #D
+            )
+            lm_params = SSMParameters(1., B=randn(12))
+            fitm_params, fitm = fit(y_noisy, lm, lm_params, u=input)
+            @fact fitm_params.B --> roughly(vec([1. 1 0 0; 1 0 1 0; 0 0 1 1]), atol=.11)
 
         end
 

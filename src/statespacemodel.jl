@@ -265,9 +265,11 @@ end #confirm_matrix_sizes
 
 function confirm_matrix_sizes(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, P1)
 
+    @assert size(B2, 2) == size(D2, 2)
+
     nx = size(A1, 1)
     ny = size(C1, 1)
-    nu = size(D2, 2)
+    nu = size(B2, 2)
 
     na1, na2  = size(A1, 2), size(A2, 2)
     nb        = size(B1, 2)
