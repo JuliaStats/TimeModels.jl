@@ -330,8 +330,8 @@ function simulate(model::StateSpaceModel, n::Int; u::Array=zeros(n, model.nu))
 
     # Cholesky decompositions of the covariance matrices, for generating
     # random noise
-    V_chol(t) = chol(model.V(t), Val{:L})
-    W_chol(t) = chol(model.W(t), Val{:L})
+    V_chol(t) = all(model.V(t) .== 0) ? model.V(t) : chol(model.V(t), Val{:L})
+    W_chol(t) = all(model.W(t) .== 0) ? model.W(t) : chol(model.W(t), Val{:L})
 
     # Generate the series
     x[:, 1] = model.x1

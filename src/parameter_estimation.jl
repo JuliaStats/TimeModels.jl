@@ -42,6 +42,9 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
         Id(_::Array{Int,2}) = I0_nx
     end
 
+    phi(t)  = (pmodel.G(t)' * pmodel.G(t)) \ pmodel.G(t)'
+    xi(t) = (pmodel.H(t)' * pmodel.H(t)) \ pmodel.H(t)'
+
     estimate_A   = length(params.A) > 0
     estimate_B   = length(params.B) > 0
     estimate_Q   = length(params.Q) > 0
@@ -73,13 +76,11 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
         #tic()
 
         if estimate_A | estimate_B | estimate_Q
-            phi(t)  = (pmodel.G(t)' * pmodel.G(t)) \ pmodel.G(t)' #Can be moved out
             Qinv    = inv(pmodel.Q(params.Q))  
             Q_      = all_x_deterministic ? I0_nx : phi(1)' * Qinv * phi(1)
         end #if ABQ
 
         if estimate_B | estimate_C | estimate_D | estimate_R
-            xi(t) = (pmodel.H(t)' * pmodel.H(t)) \ pmodel.H(t)' #Can be moved out
             Rinv  = inv(pmodel.R(params.R))
             R_    = all_y_deterministic ? I0_ny : xi(1)' * Rinv * xi(1)
         end #if
@@ -257,7 +258,7 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
                     B_S1 += Dt4' * Q_ * Dt4 + Dt2' * R_ * Dt2
                     B_S2 += Dt4' * Q_ * Dt3 + Dt2' * R_ * Dt1
 
-                    t <= (pmodel.nx +1) ? M_t *= M : nothing
+                    t <= (pmodel.nx +1) && (M_t *= M)
                     Idt1 = Idt
                     At1_ = A_
                     ft1_ = f_
@@ -303,14 +304,13 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
     ll, ll_prev = Inf, Inf
 
-    while (niter > 0) & (fraction_change(ll_prev, ll) > eps)
+    while (niter > 0) && (fraction_change(ll_prev, ll) > eps)
         ll_prev = ll 
         ll      = em_kernel!(params)
         niter -= 1
     end #while
 
-    niter > 0 ? nothing :
-        warn("Parameter estimation timed out - results may have failed to converge")
+    (niter == 0) && warn("Parameter estimation timed out - results may have failed to converge")
 
     return params, pmodel(params)
 end #fit
