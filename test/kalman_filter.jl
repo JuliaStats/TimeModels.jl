@@ -8,17 +8,6 @@ function build_model()
     W = diagm([8.0, 2.5, 4.0])
     x0 = randn(1)
     P0 = diagm([1e7])
-    mod1 = StateSpaceModel(F, V, G, W, x0, P0)
-end
-
-# Test model-fitting
-function build(theta)
-    F = diagm(theta[1])
-    V = diagm(exp(theta[2]))
-    G = reshape(theta[3:5], 3, 1)
-    W = diagm(exp(theta[6:8]))
-    x0 = [theta[9]]
-    P0 = diagm(1e7)
     StateSpaceModel(F, V, G, W, x0, P0)
 end
 
@@ -64,12 +53,6 @@ facts("Kalman Filter") do
             @fact smooth.smoothed --> roughly(smooth2.smoothed, atol=1e-2)
         end
 
-        context("Model fitting") do
-            mod1 = build_model()
-            x, y = simulate(mod1, 100)
-            fit(y, build, zeros(9))
-        end
-
         context("Missing data") do
             mod1 = build_model()
             x, y = simulate(mod1, 100)
@@ -105,8 +88,10 @@ facts("Kalman Filter") do
             input = 100*[sin(t/2) sin(t/4) cos(t/2) cos(t/4)] + 10
             y_noisy = [y_true zeros(length(t)) -y_true] +
                         100*[sin(t/2)+sin(t/4) sin(t/2)+cos(t/2) cos(t/2)+cos(t/4)] + 10 + randn(length(t), 3)
-            lm = StateSpaceModel([1 dt; 0 1], zeros(2,4), zeros(2,2),
-                    [1. 0; 0 0; -1 0], [1. 1 0 0; 1 0 1 0; 0 0 1 1], s*eye(3), zeros(2), 100*eye(2))
+            lm = StateSpaceModel([1 dt; 0 1], zeros(2,2),
+                                  [1. 0; 0 0; -1 0], s*eye(3),
+                                  zeros(2), 100*eye(2),
+                                  B=zeros(2, 4), D=[1. 1 0 0; 1 0 1 0; 0 0 1 1])
             lm_filt = kalman_filter(y_noisy, lm, u=input)
             @fact lm_filt.filtered[end,1] --> roughly(y_true[end, 1], atol=3*sqrt(lm_filt.error_cov[1,1,end]))
 

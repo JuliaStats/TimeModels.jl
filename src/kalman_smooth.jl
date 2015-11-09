@@ -63,7 +63,7 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
     innov_cov_inv_t     = copy(innov_cov_t)
     Kt                  = zeros(model.nx, model.ny)
 
-    Ft, Gt, Dt, Wt, ut  = model.F(1), model.G(1), model.D(1), model.W(1), zeros(model.nu)
+    At, Ct, Dt, Wt, ut  = model.A(1), model.C(1), model.D(1), model.W(1), zeros(model.nu)
 
     log_likelihood = n*model.ny*log(2pi)/2
     marginal_likelihood(innov::Vector, innov_cov::Matrix, innov_cov_inv::Matrix) =
@@ -74,16 +74,16 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
 
         # Predict using last iteration's values
         if t > 1
-            x_pred_t = Ft * x_pred_t + model.B(t-1) * ut + Kt * innov_t
-            V_pred_t = Ft * V_pred_t * (Ft - Kt * Gt)' + model.V(t)
+            x_pred_t = At * x_pred_t + model.B(t-1) * ut + Kt * innov_t
+            V_pred_t = At * V_pred_t * (At - Kt * Ct)' + model.V(t)
             V_pred_t = (V_pred_t + V_pred_t')/2
         end #if
         x_pred[:, t]    = x_pred_t
         V_pred[:, :, t] = V_pred_t
 
         # Assign new values
-        Ft = model.F(t)
-        Gt = model.G(t)
+        At = model.A(t)
+        Ct = model.C(t)
         Dt = model.D(t)
         Wt = model.W(t)
         ut = u[:, t]
@@ -93,15 +93,15 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
         if missing_obs
             ynnt = y_notnan[:, t]
             I1, I2 = diagm(ynnt), diagm(!ynnt)
-            Gt, Dt = I1 * Gt, I1 * Dt
+            Ct, Dt = I1 * Ct, I1 * Dt
             Wt = I1 * Wt * I1 + I2 * Wt * I2
         end #if
 
         # Compute nessecary filtering quantities
-        innov_t         = y[:, t] - Gt * x_pred_t - Dt * ut
-        innov_cov_t     = Gt * V_pred_t * Gt' + Wt
+        innov_t         = y[:, t] - Ct * x_pred_t - Dt * ut
+        innov_cov_t     = Ct * V_pred_t * Ct' + Wt
         innov_cov_inv_t = inv(innov_cov_t)
-        Kt              = Ft * V_pred_t * Gt' * innov_cov_inv_t
+        Kt              = At * V_pred_t * Ct' * innov_cov_inv_t
 
         innov[:, t]             = innov_t
         innov_cov_inv[:, :, t]  = innov_cov_inv_t
@@ -115,13 +115,13 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
 
     for t = n:-1:1
 
-        Gt = model.G(t)
+        Ct = model.C(t)
         innov_cov_inv_t = innov_cov_inv[:, :, t]
         V_pred_t = V_pred[:, :, t]
-        L = model.F(t) - K[:, :, t] * Gt
+        L = model.A(t) - K[:, :, t] * Ct
 
-        r = Gt' * innov_cov_inv_t * innov[:, t] + L' * r
-        N = Gt' * innov_cov_inv_t * Gt + L' * N * L
+        r = Ct' * innov_cov_inv_t * innov[:, t] + L' * r
+        N = Ct' * innov_cov_inv_t * Ct + L' * N * L
 
         x_smooth[:, t] = x_pred[:, t] + V_pred_t * r
         V_smooth_t = V_pred_t - V_pred_t * N * V_pred_t
@@ -132,6 +132,26 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
     return KalmanSmoothedMinimal(y_orig, x_smooth', V_smooth, u', model, log_likelihood)
 
 end #smooth
+
+# Bad performance - will be much better with sparse matrices
+function lag1_smooth(y::Array, u::Array, m::StateSpaceModel)
+
+    A_stack(t) = [m.A(t) zeros(m.nx, m.nx); eye(m.nx) zeros(m.nx, m.nx)]
+    B_stack(t) = [m.B(t); zeros(m.nx, m.nu)]
+    V_stack(t) = [m.V(t) zeros(m.nx, m.nx); zeros(m.nx, 2*m.nx)]
+    C_stack(t) = [m.C(t) zeros(m.ny, m.nx)]
+    x1_stack   = [m.x1; zeros(m.x1)]
+    P1_stack   = [m.P1 zeros(m.nx, m.nx); zeros(m.nx, 2*m.nx)]
+    stack_model = StateSpaceModel(A_stack, V_stack, C_stack, m.W,
+                                      x1_stack, P1_stack, B=B_stack, D=m.D)
+
+    stack_smoothed = kalman_smooth(y, stack_model, u=u)
+    x     = stack_smoothed.smoothed[:, 1:m.nx]'
+    P     = stack_smoothed.error_cov[1:m.nx, 1:m.nx, :]
+    Plag1 = stack_smoothed.error_cov[1:m.nx, (m.nx+1):end, :]
+    return x, P, Plag1, stack_smoothed.loglik
+
+end #function
 
 
 # Rauch-Tung-Striebel Smoothing
@@ -149,7 +169,7 @@ function kalman_smooth(filt::KalmanFiltered)
     x_smooth[:, n] = x_filt[:, n]
     P_smoov[:, :, n] = P_filt[:, :, n]
     for i = (n-1):-1:1
-        J = P_filt[:, :, i] * model.F(i)' * inv(P_pred[:,:,i+1])
+        J = P_filt[:, :, i] * model.A(i)' * inv(P_pred[:,:,i+1])
         x_smooth[:, i] = x_filt[:, i] + J * (x_smooth[:, i+1] - x_pred[:, i+1])
         P_smoov[:, :, i] = P_filt[:, :, i] + J * (P_smoov[:, :, i+1] - P_pred[:,:,i+1]) * J'
     end
