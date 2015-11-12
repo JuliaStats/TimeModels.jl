@@ -25,9 +25,11 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
     I_nx = eye(pmodel.nx)
     I0_nx = 0I_nx
+
     I_ny = eye(pmodel.ny)
     I0_ny = 0I_ny
-    I_nu = eye(pmodel.nu)
+
+    I_nu = speye(pmodel.nu)
 
     # Requirement: zeros-rows in G and H remain consistent
     x_deterministic = all(pmodel.G(1) .== 0, 2)
@@ -45,22 +47,21 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
     phi(t)  = (pmodel.G(t)' * pmodel.G(t)) \ pmodel.G(t)'
     xi(t) = (pmodel.H(t)' * pmodel.H(t)) \ pmodel.H(t)'
 
-    estimate_A   = length(params.A) > 0
-    estimate_B   = length(params.B) > 0
-    estimate_Q   = length(params.Q) > 0
-    estimate_C   = length(params.C) > 0
-    estimate_D   = length(params.D) > 0
-    estimate_R   = length(params.R) > 0
-    estimate_x1  = length(params.x1) > 0
-    estimate_P1  = length(params.P1) > 0
+    na, nb, nq, nc, nd, nr, nx1, nP1 =
+        map(length, Vector[params.A, params.B, params.Q,
+                        params.C, params.D, params.R, params.x1, params.P1])
 
+    estimate_A, estimate_B, estimate_Q, estimate_C, estimate_D, estimate_R,
+        estimate_x1, estimate_P1 = map(x->x>0, [na, nb, nq, nc, nd, nr, nx1, nP1])
 
     function em_kernel!{T}(params::SSMParameters{T})
 
         m = pmodel(params)
 
-        #print("Expectations (smoothing)... ")
-        #tic()
+        #=
+        print("Expectations (smoothing)... ")
+        tic()
+        =#
 
         if estimate_A | estimate_Q
             exs, P, Plag1, loglik = lag1_smooth(y_orig, u_orig, m)
@@ -69,11 +70,13 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
             exs, P, loglik = smoothed.smoothed', smoothed.error_cov, smoothed.loglik
         end
 
-        #toc()
-        #println("Negative log-likelihood: ", loglik)
+        #=
+        toc()
+        println("Negative log-likelihood: ", loglik)
 
-        #print("Maximizations... ")
-        #tic()
+        print("Maximizations... ")
+        tic()
+        =#
 
         if estimate_A | estimate_B | estimate_Q
             Qinv    = inv(pmodel.Q(params.Q))  
@@ -105,70 +108,45 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
         Nt = N(1)
         ey = yt - Nt * (yt - m.C(1) * exs[:, 1] - m.D(1) * u[:, 1])
 
+        At  = m.A(1)
         But = m.B(1) * u[:, 1]
         Dut = m.D(1) * u[:, 1]
         
-        if estimate_A # A setup
-            A_S1 = zeros(length(params.A), length(params.A))
-            A_S2 = zeros(params.A)
-        end #if A
+        estimate_A && ((A_S1, A_S2) = (zeros(na, na), zeros(na)))
 
         if estimate_B # B setup
-            pkp = kron(I_nu, pmodel.B1(1))
-            f_Bt = pkp * pmodel.B2.f
-            D_Bt = pkp * pmodel.B2.D
 
-            B_kp = kron(u[:, 1]', I_nx)
-            fB = B_kp * f_Bt
-            DB = B_kp * D_Bt
+            x1 = m.x1
+            pmodel_B2_D = sparse(pmodel.B2.D)
 
-            Idt = I_nx
-            A_  = I_nx
-            f_  = B_kp * f_Bt * 0
-            D_  = B_kp * D_Bt * 0
+            Δt1, Δt2 = zeros(m.nx, nb), zeros(m.nx)
+            Δt3, Δt4 = zeros(m.ny, nb), zeros(m.ny)
+
             M   = 1 * (m.A(1) .!= 0) #Assumption: constant position of nonzero values in A
             M_t = copy(M)
-            EX0 = exs[:, 1]
 
-            Dt1 = ey - m.C(1) * (I - Idt) * ex - m.C(1) * Idt * (A_ * EX0 + f_) - Dut
-            Dt2 = m.C(1) * Idt * D_
-            Dt3 = zeros(pmodel.nx)
-            Dt4 = DB * 0
+            Idt     = Idt1      = I_nx
+            At1_    = At2_      = I_nx
+            f_Bu_t1 = f_Bu_t2   = zeros(m.nx)
+            D_Bu_t1 = D_Bu_t2   = zeros(m.nx, nb)
+            ku_f_Bt = ku_f_Bt1  = zeros(m.nx)
+            ku_D_Bt = ku_D_Bt1  = zeros(m.nx, nb)
 
-            Idt1 = Idt
-            At1_ = A_
-            ft1_ = f_
-            Dt1_ = D_ 
+            B_S1, B_S2 = zeros(nb, nb), zeros(nb)
 
-            B_S1 = Dt2' * R_ * Dt2
-            B_S2 = Dt2' * R_ * Dt1
         end #if B
 
-        if estimate_Q # Q setup
-            Q_S1 = zeros(length(params.Q), length(params.Q))
-            Q_S2 = zeros(params.Q)
-        end #if
-
-        if estimate_C # C setup
-            C_S1 = zeros(length(params.C), length(params.C))
-            C_S2 = zeros(params.C)
-        end #if
-
-        if estimate_D # D setup
-            D_S1 = zeros(length(params.D), length(params.D))
-            D_S2 = zeros(params.D)
-        end #if
-
-        if estimate_R # R setup
-            R_S1 = zeros(length(params.R), length(params.R))
-            R_S2 = zeros(params.R)
-        end #if
+        estimate_Q && ((Q_S1, Q_S2) = (zeros(nq, nq), zeros(nq)))
+        estimate_C && ((C_S1, C_S2) = (zeros(nc, nc), zeros(nc)))
+        estimate_D && ((D_S1, D_S2) = (zeros(nd, nd), zeros(nd)))
+        estimate_R && ((R_S1, R_S2) = (zeros(nr, nr), zeros(nr)))
 
         for t in 1:n
 
+            At_prev = At #TODO: Use this in the appropriate places?
             At      = m.A(t)
-            Pt      = P[:, :, t]
             ut      = u[:, t]
+            Pt      = P[t]
 
             ex_prev = ex
             ex      = exs[:, t]
@@ -183,7 +161,7 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
                 if (estimate_A || estimate_Q) && t > 1
 
-                    exx1 = Plag1[:, :, t] + ex * ex_prev'
+                    exx1 = Plag1[t] + ex * ex_prev'
                     But_prev = But
                     But = m.B(t) * ut
 
@@ -241,28 +219,37 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
                 if estimate_B
 
+                    if t > 1
+                        Δt1 = At_prev * Idt1 * D_Bu_t2 + ku_D_Bt1
+                        Δt2 = ex - At_prev * (I - Idt1) * ex_prev - At_prev * Idt1 * (At2_ * x1 + f_Bu_t2) - ku_f_Bt1
+                    end
+
+                    Δt3 = Ct * Idt * D_Bu_t1
+                    Δt4 = ey - Ct * (I - Idt) * ex - Ct * Idt * (At1_ * x1 + f_Bu_t1) - Dut
+
+                    B_S1 += Δt1' * Q_ * Δt1 + Δt3' * R_ * Δt3
+                    B_S2 += Δt1' * Q_ * Δt2 + Δt3' * R_ * Δt4
+
                     Idt = Id(M_t)
-                    B_kp = kron(ut', I_nx)
-                    A_ = At * At1_
-                    fB = B_kp * f_Bt
-                    DB = B_kp * D_Bt
-                    f_ = At * ft1_ + fB
-                    D_ = At * Dt1_ + DB
-
-                    Dt1 = ey - Ct * (I - Idt) * ex - Ct * Idt * (A_ * EX0 + f_) - Dut
-                    Dt2 = Ct * Idt * D_
-                    Dt3 = ex - At * (I - Idt1) * ex_prev -
-                                At * Idt1 * (At1_ * EX0 + ft1_) - fB
-                    Dt4 = DB + At * Idt1 * Dt1_
-
-                    B_S1 += Dt4' * Q_ * Dt4 + Dt2' * R_ * Dt2
-                    B_S2 += Dt4' * Q_ * Dt3 + Dt2' * R_ * Dt1
-
-                    t <= (pmodel.nx +1) && (M_t *= M)
                     Idt1 = Idt
-                    At1_ = A_
-                    ft1_ = f_
-                    Dt1_ = D_ 
+                    t <= pmodel.nx && (M_t *= M)
+
+                    At2_ = At1_
+                    At1_ = At * At1_
+
+                    kuB = kron(ut', pmodel.B1(t))
+
+                    ku_f_Bt   = kuB * pmodel.B2.f
+                    ku_f_Bt1  = ku_f_Bt
+
+                    f_Bu_t2   = f_Bu_t1
+                    f_Bu_t1   = ku_f_Bt + At * f_Bu_t1
+
+                    ku_D_Bt   = kuB * pmodel_B2_D
+                    ku_D_Bt1  = ku_D_Bt
+
+                    D_Bu_t2   = D_Bu_t1
+                    D_Bu_t1   = ku_D_Bt + At * D_Bu_t1
 
                 end #if B
 
@@ -312,7 +299,8 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
     (niter == 0) && warn("Parameter estimation timed out - results may have failed to converge")
 
-    return params, pmodel(params)
+    return params, kalman_smooth(y_orig, pmodel(params), u=u_orig)
+
 end #fit
 
 function fit{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu),

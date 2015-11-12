@@ -3,7 +3,7 @@ type KalmanSmoothed{T}
 	filtered::Array{T}
 	smoothed::Array{T}
 	error_cov::Array{T}
-	model::StateSpaceModel
+	model::StateSpaceModel{T}
 	y::Array{T}
   u::Array{T}
 	loglik::T
@@ -12,9 +12,9 @@ end
 type KalmanSmoothedMinimal{T}
 	y::Array{T}
 	smoothed::Array{T}
-	error_cov::Array{T}
+	error_cov::Union{Vector{Matrix{T}}, Vector{SparseMatrixCSC{T, Int}}}
   u::Array{T}
-	model::StateSpaceModel
+	model::StateSpaceModel{T}
 	loglik::T
 end
 
@@ -35,10 +35,13 @@ function show{T}(io::IO, smoothed::KalmanSmoothedMinimal{T})
 end
 
 # Durbin-Koopman Smoothing
-function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1), model.nu))
+function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu))
+
+    Ksparse = issparse(model.A(1)) && issparse(model.V(1)) && issparse(model.C(1))
 
     y_orig = copy(y)
     y = y'
+    u_orig = copy(u)
     u = u'
     n = size(y, 2)
 
@@ -47,108 +50,127 @@ function kalman_smooth(y::Array, model::StateSpaceModel; u::Array=zeros(size(y,1
     @assert size(u, 1) == model.nu
     @assert size(u, 2) == n
 
+    I0ny = zeros(model.ny, model.ny)
+
     y_notnan = !isnan(y)
     y = y .* y_notnan
 
-    x_pred,  V_pred     = zeros(model.nx, n), zeros(model.nx, model.nx, n)
-    x_smooth, V_smooth  = copy(x_pred), copy(V_pred)
-    x_pred_t, V_pred_t  = model.x1, model.P1
-
-    innov               = zeros(model.ny, n)
-    innov_cov_inv       = zeros(model.ny, model.ny, n)
-    K                   = zeros(model.nx, model.ny, n)
+    x_pred_t, P_pred_t  = model.x1, model.P1
+    x, P                = zeros(model.nx, n), Array{typeof(P_pred_t)}(0)
 
     innov_t             = zeros(model.ny)
     innov_cov_t         = zeros(model.ny, model.ny)
     innov_cov_inv_t     = copy(innov_cov_t)
-    Kt                  = zeros(model.nx, model.ny)
+    Kt                  = Ksparse ? spzeros(model.nx, model.ny) : zeros(model.nx, model.ny)
+    KCt                 = Ksparse ? spzeros(model.nx, model.nx) : zeros(model.nx, model.nx)
 
-    At, Ct, Dt, Wt, ut  = model.A(1), model.C(1), model.D(1), model.W(1), zeros(model.nu)
+    innov               = zeros(model.ny, n)
+    innov_cov_inv       = zeros(model.ny, model.ny, n)
+    KC                  = Array{typeof(KCt)}(0)
+
+    ut, Ct, Wt     = zeros(model.nu), model.C(1), model.W(1)
 
     log_likelihood = n*model.ny*log(2pi)/2
-    marginal_likelihood(innov::Vector, innov_cov::Matrix, innov_cov_inv::Matrix) =
-         (dot(innov, innov_cov_inv * innov) + logdet(innov_cov))/2
+    marginal_likelihood(innov::Vector, innov_cov::Matrix,
+          innov_cov_inv::Matrix) =
+              (dot(innov, innov_cov_inv * innov) + logdet(innov_cov))/2
 
     # Prediction and filtering
     for t = 1:n
 
         # Predict using last iteration's values
         if t > 1
-            x_pred_t = At * x_pred_t + model.B(t-1) * ut + Kt * innov_t
-            V_pred_t = At * V_pred_t * (At - Kt * Ct)' + model.V(t)
-            V_pred_t = (V_pred_t + V_pred_t')/2
+
+            At, But, Vt = model.A(t-1), model.B(t-1) * ut, model.V(t-1)
+            AP_pred_t   = At * P_pred_t
+            Kt          = AP_pred_t * Ct' * innov_cov_inv_t
+            Ksparse && (Kt = sparse(Kt))
+            KCt         = Kt * Ct
+            push!(KC, KCt)
+
+            x_pred_t = At * x_pred_t + But + Kt * innov_t
+            P_pred_t = any(Wt .!= 0) ? AP_pred_t * (At - KCt)' + Vt : Vt
+
         end #if
-        x_pred[:, t]    = x_pred_t
-        V_pred[:, :, t] = V_pred_t
+        x[:, t]  = x_pred_t
+        push!(P, (P_pred_t + P_pred_t')/2)
 
         # Assign new values
-        At = model.A(t)
-        Ct = model.C(t)
-        Dt = model.D(t)
-        Wt = model.W(t)
-        ut = u[:, t]
+        ut  = u[:, t]
+        Ct  = model.C(t)
+        Dut = model.D(t) * ut
+        Wt  = model.W(t)
 
         # Check for and handle missing observation values
         missing_obs = !all(y_notnan[:, t])
         if missing_obs
             ynnt = y_notnan[:, t]
-            I1, I2 = diagm(ynnt), diagm(!ynnt)
-            Ct, Dt = I1 * Ct, I1 * Dt
+            I1, I2 = spdiagm(ynnt), spdiagm(!ynnt)
+            Ct, Dut = I1 * Ct, I1 * Dut
             Wt = I1 * Wt * I1 + I2 * Wt * I2
         end #if
 
         # Compute nessecary filtering quantities
-        innov_t         = y[:, t] - Ct * x_pred_t - Dt * ut
-        innov_cov_t     = Ct * V_pred_t * Ct' + Wt
-        innov_cov_inv_t = inv(innov_cov_t)
-        Kt              = At * V_pred_t * Ct' * innov_cov_inv_t
+        innov_t           = y[:, t] - Ct * x_pred_t - Dut
+        innov_cov_t       = Ct * P_pred_t * Ct' + Wt |> full
+        nonzero_innov_cov = all(diag(innov_cov_t) .!= 0)
+        innov_cov_inv_t   = nonzero_innov_cov ? inv(innov_cov_t) : I0ny
 
         innov[:, t]             = innov_t
         innov_cov_inv[:, :, t]  = innov_cov_inv_t
-        K[:, :, t]              = Kt
-        log_likelihood += marginal_likelihood(innov_t, innov_cov_t, innov_cov_inv_t)
+
+        nonzero_innov_cov && (log_likelihood += marginal_likelihood(innov_t, innov_cov_t, innov_cov_inv_t))
 
     end #for
+    push!(KC, zeros(KC[1]))
 
     # Smoothing
-    r, N = zeros(model.nx), zeros(model.nx, model.nx)
+    r = zeros(model.nx)
+    N = zeros(model.P1)
 
     for t = n:-1:1
 
-        Ct = model.C(t)
-        innov_cov_inv_t = innov_cov_inv[:, :, t]
-        V_pred_t = V_pred[:, :, t]
-        L = model.A(t) - K[:, :, t] * Ct
+        Ct = !all(y_notnan[:, t]) ? spdiagm(y_notnan[:, t]) * model.C(t) : model.C(t)
 
-        r = Ct' * innov_cov_inv_t * innov[:, t] + L' * r
-        N = Ct' * innov_cov_inv_t * Ct + L' * N * L
+        CF = Ksparse ? sparse(Ct' * innov_cov_inv[:, :, t]) : Ct' * innov_cov_inv[:, :, t]
+        P_pred_t = P[t]
+        L = model.A(t) - KC[t]
 
-        x_smooth[:, t] = x_pred[:, t] + V_pred_t * r
-        V_smooth_t = V_pred_t - V_pred_t * N * V_pred_t
-        V_smooth[:, :, t] =  (V_smooth_t + V_smooth_t')/2
+        r = CF * innov[:, t] + L' * r
+        N = CF * Ct  + L' * N * L
+
+        x[:, t] = x[:, t] + P_pred_t * r
+        P_smooth_t = P_pred_t  - P_pred_t * N * P_pred_t
+        P[t] = (P_smooth_t + P_smooth_t')/2
 
     end #for
 
-    return KalmanSmoothedMinimal(y_orig, x_smooth', V_smooth, u', model, log_likelihood)
+    return KalmanSmoothedMinimal(y_orig, x', P, u_orig, model, log_likelihood)
 
 end #smooth
 
-# Bad performance - will be much better with sparse matrices
-function lag1_smooth(y::Array, u::Array, m::StateSpaceModel)
+function lag1_smooth{T}(y::Array{T}, u::Array{T}, m::StateSpaceModel{T})
 
-    A_stack(t) = [m.A(t) zeros(m.nx, m.nx); eye(m.nx) zeros(m.nx, m.nx)]
-    B_stack(t) = [m.B(t); zeros(m.nx, m.nu)]
-    V_stack(t) = [m.V(t) zeros(m.nx, m.nx); zeros(m.nx, 2*m.nx)]
-    C_stack(t) = [m.C(t) zeros(m.ny, m.nx)]
-    x1_stack   = [m.x1; zeros(m.x1)]
-    P1_stack   = [m.P1 zeros(m.nx, m.nx); zeros(m.nx, 2*m.nx)]
+    A_0, A_I  = zeros(m.A(1)), eye(m.A(1))
+    B_0, V_0, C_0 = zeros(m.B(1)), zeros(m.V(1)), zeros(m.C(1))
+    x1_0, P1_0  = zeros(m.x1), zeros(m.P1)
+
+    A_stack(t) = [m.A(t) A_0; A_I A_0]
+    B_stack(t) = [m.B(t); B_0]
+    V_stack(t) = [m.V(t) V_0; V_0 V_0]
+    C_stack(t) = [m.C(t) C_0]
+    x1_stack   = [m.x1; x1_0]
+    P1_stack   = [m.P1 P1_0; P1_0 P1_0]
     stack_model = StateSpaceModel(A_stack, V_stack, C_stack, m.W,
                                       x1_stack, P1_stack, B=B_stack, D=m.D)
-
     stack_smoothed = kalman_smooth(y, stack_model, u=u)
+
     x     = stack_smoothed.smoothed[:, 1:m.nx]'
-    P     = stack_smoothed.error_cov[1:m.nx, 1:m.nx, :]
-    Plag1 = stack_smoothed.error_cov[1:m.nx, (m.nx+1):end, :]
+
+    err_cov_type = typeof(m.P1)
+    P     = err_cov_type[P[1:m.nx, 1:m.nx] for P in stack_smoothed.error_cov]
+    Plag1 = err_cov_type[P[1:m.nx, (m.nx+1):end] for P in stack_smoothed.error_cov]
+
     return x, P, Plag1, stack_smoothed.loglik
 
 end #function
