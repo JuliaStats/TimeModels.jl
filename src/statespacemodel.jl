@@ -184,13 +184,15 @@ immutable ParametrizedSSM{T} <: AbstractStateSpaceModel{T}
 
     # Initial state and error covariance
     x1::ParametrizedMatrix{T}
-    P1::ParametrizedMatrix{T} #TODO ... Eliminate?
+    J::AbstractMatrix
+    S::ParametrizedMatrix{T}
 
     nx::Int
     ny::Int
     nu::Int
     nq::Int
     nr::Int
+    ns::Int
 
     function ParametrizedSSM(A1::Function, A2::ParametrizedMatrix{T}, A3::Function,
                                 B1::Function, B2::ParametrizedMatrix{T},
@@ -198,26 +200,26 @@ immutable ParametrizedSSM{T} <: AbstractStateSpaceModel{T}
                                 C1::Function, C2::ParametrizedMatrix{T}, C3::Function,
                                 D1::Function, D2::ParametrizedMatrix{T},
                                 H::Function, R::ParametrizedMatrix{T},
-                                x1::ParametrizedMatrix{T}, P1::ParametrizedMatrix{T})
-        nx, ny, nu, nq, nr = confirm_matrix_sizes(A1(1), A2, A3(1), B1(1), B2, G(1), Q,
-                                                  C1(1), C2, C3(1), D1(1), D2, H(1), R, x1, P1)
-        new(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, P1, nx, ny, nu, nq, nr)
+                                x1::ParametrizedMatrix{T}, J::AbstractMatrix, S::ParametrizedMatrix{T})
+        nx, ny, nu, nq, nr, ns = confirm_matrix_sizes(A1(1), A2, A3(1), B1(1), B2, G(1), Q,
+                                              C1(1), C2, C3(1), D1(1), D2, H(1), R, x1, J, S)
+        new(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, J, S, nx, ny, nu, nq, nr, ns)
     end
 
 end #ParametrizedSSM
 
 ParametrizedSSM{T}(A2::ParametrizedMatrix{T}, Q::ParametrizedMatrix{T},
                           C2::ParametrizedMatrix{T}, R::ParametrizedMatrix{T},
-                          x1::ParametrizedMatrix{T}, P1::ParametrizedMatrix{T};
+                          x1::ParametrizedMatrix{T}, S::ParametrizedMatrix{T};
                           A1::Function=_->speye(size(A2,1)), A3::Function=_->speye(size(A2,2)),
-                          B1::Function=_->speye(size(A1(1),1)),
-                          B2::ParametrizedMatrix{T}=parametrize_none(spzeros(size(A1(1),1), 1)),
-                          G::Function=_->speye(size(A1(1),1)),
+                          B1::Function=_->speye(size(x1,1)),
+                          B2::ParametrizedMatrix{T}=parametrize_none(spzeros(size(B1(1),2), 1)),
+                          G::Function=_->speye(size(x1,1)),
                           C1::Function=_->speye(size(C2, 1)), C3::Function=_->speye(size(C2,2)),
                           D1::Function=_->speye(size(C1(1),1)),
                           D2::ParametrizedMatrix{T}=parametrize_none(spzeros(size(C1(1),1), 1)),
-                          H::Function=_->speye(size(C1(1),1))) =
-          ParametrizedSSM{T}(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, P1)
+                          H::Function=_->speye(size(C1(1),1)), J::AbstractMatrix=speye(size(x1, 1))) =
+          ParametrizedSSM{T}(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, J, S)
 
 # State space model parameters
 immutable SSMParameters{T}
@@ -234,14 +236,14 @@ immutable SSMParameters{T}
 
     # Initial state and error covariance
     x1::Vector{T}
-    P1::Vector{T}
+    S::Vector{T}
 
 end #SSMParameters
 
 SSMParameters{T}(_::T; A::Vector{T}=T[], B::Vector{T}=T[], Q::Vector{T}=T[],
                   C::Vector{T}=T[], D::Vector{T}=T[], R::Vector{T}=T[],
-                  x1::Vector{T}=T[], P1::Vector{T}=T[]) =
-              SSMParameters{T}(A, B, Q, C, D, R, x1, P1)
+                  x1::Vector{T}=T[], S::Vector{T}=T[]) =
+              SSMParameters{T}(A, B, Q, C, D, R, x1, S)
 
 function Base.call{T}(m::ParametrizedSSM{T}, p::SSMParameters{T})
     A2, B2, Q = m.A2(p.A), m.B2(p.B), m.Q(p.Q)
@@ -253,7 +255,7 @@ function Base.call{T}(m::ParametrizedSSM{T}, p::SSMParameters{T})
     D(t) = m.D1(t) * D2
     W(t) = m.H(t) * R * m.H(t)'
     x1 = vec(m.x1(p.x1))
-    P1 = m.P1(p.P1)
+    P1 = m.J * m.S(p.S) * m.J'
     return StateSpaceModel(A, V, C, W, x1, P1, B=B, D=D)
 end #call
 
@@ -286,7 +288,7 @@ function confirm_matrix_sizes{T}(A1::AbstractMatrix, A2::ParametrizedMatrix{T}, 
                               C1::AbstractMatrix, C2::ParametrizedMatrix{T}, C3::AbstractMatrix,
                               D1::AbstractMatrix, D2::ParametrizedMatrix{T},
                               H::AbstractMatrix, R::ParametrizedMatrix{T},
-                              x1::ParametrizedMatrix{T}, P1::ParametrizedMatrix{T})
+                              x1::ParametrizedMatrix{T}, J::AbstractMatrix, S::ParametrizedMatrix{T})
 
     @assert size(B2, 2) == size(D2, 2)
 
@@ -301,6 +303,7 @@ function confirm_matrix_sizes{T}(A1::AbstractMatrix, A2::ParametrizedMatrix{T}, 
 
     nq = size(Q, 1)
     nr = size(R, 1)
+    ns = size(S, 1)
 
     @assert size(A1) == (nx, na1)
     @assert size(A2) == (na1, na2)
@@ -323,9 +326,10 @@ function confirm_matrix_sizes{T}(A1::AbstractMatrix, A2::ParametrizedMatrix{T}, 
     @assert size(R)  == (nr, nr)
 
     @assert length(x1)  == nx
-    @assert size(P1)    == (nx, nx)
+    @assert size(J)     == (nx, ns)
+    @assert size(S)     == (ns, ns)
 
-    return nx, ny, nu, nq, nr
+    return nx, ny, nu, nq, nr, ns
 
 end #confirm_matrix_sizes
 

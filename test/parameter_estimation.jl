@@ -80,6 +80,37 @@ facts("Parameter Estimation") do
             @fact fitm_params.A --> roughly([.5, .8, .4], atol=0.2)
             @fact fitm_params.Q --> roughly([.01, .01, .01], atol=0.05)
 
+            coeffs = randn(3)
+            X = randn(200,3)
+            Y = X * coeffs + .4*randn(200)
+            lm = ParametrizedSSM(
+                parametrize_none(eye(3)), #A
+                parametrize_none(eye(1)), #Q
+                parametrize_none(eye(3)), #C2
+                parametrize_diag(ones(1)), #R
+                parametrize_full(zeros(3,1)), #x1
+                parametrize_none(eye(3)), #S
+                G=_->zeros(3,1), C1=t->X[t,:]
+            )
+
+            lm_params = SSMParameters(1., R=ones(1), x1=100*randn(3))
+            fitm_params, fitm = fit(Y, lm, lm_params)
+            @fact fitm_params.x1 --> roughly(coeffs, atol=0.1)
+            @fact fitm_params.R[1] --> roughly(.16, atol=0.05)
+
+            lm = ParametrizedSSM(
+                parametrize_none(eye(3)), #A
+                parametrize_none(eye(1)), #Q
+                parametrize_none(eye(3)), #C2
+                parametrize_none(.16*ones(1,1)), #R
+                parametrize_none(coeffs+[.2,.3,.5].*randn(3,1)), #x1
+                parametrize_diag(ones(3)), #S
+                G=_->zeros(3,1), C1=t->X[t,:]
+            )
+            lm_params = SSMParameters(1., S=100*ones(3))
+            fitm_params, fitm = fit(Y, lm, lm_params)
+            @fact fitm_params.S --> roughly([.2,.3,.5].^2, atol=0.15)
+
         end
 
         context("With exogenous inputs") do
@@ -104,7 +135,7 @@ facts("Parameter Estimation") do
             lm_params = SSMParameters(1., R=rand(3), D=randn(12))
             fitm_params, fitm = fit(y_noisy, lm, lm_params, u=input)
             @fact fitm_params.D --> roughly(vec([1. 1 0 0; 1 0 1 0; 0 0 1 1]), atol=.1)
-            @fact sqrt(fitm_params.R) --> roughly([s1, s2, s3], atol=.1)
+            @fact sqrt(fitm_params.R) --> roughly([s1, s2, s3], atol=.15)
 
             y_noisy = [0 0 0;
                   [input[:,1]+input[:,2] input[:,1]+input[:,3] input[:,3]+input[:,4]][1:end-1, :]] +
