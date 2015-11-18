@@ -5,7 +5,7 @@ type KalmanSmoothed{T}
 	error_cov::Array{T}
 	model::StateSpaceModel
 	y::Array{T}
-  u::Array{T}
+	u::Array{T}
 	loglik::T
 end
 
@@ -13,7 +13,7 @@ type KalmanSmoothedMinimal{T}
 	y::Array{T}
 	smoothed::Array{T}
 	error_cov::Array{T}
-  u::Array{T}
+	u::Array{T}
 	model::StateSpaceModel
 	loglik::T
 end

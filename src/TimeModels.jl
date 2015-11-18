@@ -14,7 +14,7 @@ export
 
   #Kalman
   kalman_filter, KalmanFiltered,
-  kalman_smooth, KalmanSmoothed,
+  kalman_smooth, KalmanSmoothed, KalmanSmoothedMinimal,
 
   # Parameter fitting
   ParametrizedMatrix,
