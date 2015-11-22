@@ -137,10 +137,6 @@ facts("Kalman Filter") do
             context("Correct initial guess") do
                 filt = kalman_filter(y, mod2)
                 @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
-
-                #= x_est = round(filt.predicted[end, :], 3) =#
-                #= display(lineplot(collect(1:size(x, 1)) / fs, vec(filt.predicted[:, 1]), width = 120, title="Filtered State 1: $(x_est[1])")) =#
-                #= display(lineplot(collect(1:size(x, 1)) / fs, vec(filt.predicted[:, 2]), width = 120, title="Filtered State 2: $(x_est[2])")) =#
             end
 
             context("Incorrect initial guess") do
@@ -154,6 +150,12 @@ facts("Kalman Filter") do
                 mod4 = sinusoid_model(4, fs = 256, x0=[1.7, -0.2], W=3.0)
                 filt = kalman_filter(y, mod4)
                 @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
+            end
+
+            context("Standalone log-likelihood function works") do
+                loglik1 = kalman_filter(y, mod2).loglik
+                loglik2 = loglikelihood(y, mod2)
+                @fact loglik1 --> roughly(loglik2)
             end
 
         end
