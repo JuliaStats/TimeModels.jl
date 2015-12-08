@@ -72,3 +72,73 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=ze
     return KalmanFiltered(x_filt', x_pred', P_filt, P_pred, model, y', u', log_likelihood)
 end
 
+function loglikelihood{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu))
+
+
+    y, u = y', u'
+    n = size(y, 2)
+
+    @assert !any(isnan(u))
+    @assert size(y, 1) == model.ny
+    @assert size(u, 1) == model.nu
+    @assert size(u, 2) == n
+
+    y_notnan = !isnan(y)
+    y = y .* y_notnan
+
+    I0ny = zeros(model.ny, model.ny)
+    Ksparse = issparse(model.A(1)) && issparse(model.V(1)) && issparse(model.C(1))
+
+    x_pred_t, P_pred_t  = model.x1, model.P1
+    ut, Ct, Wt          = zeros(model.nu), model.C(1), model.W(1)
+    innov_t, innov_cov_inv_t  = zeros(model.ny), I0ny
+
+    log_likelihood = n*model.ny*log(2pi)/2
+    marginal_likelihood(innov::Vector, innov_cov::Matrix,
+          innov_cov_inv::Matrix) =
+              (dot(innov, innov_cov_inv * innov) + logdet(innov_cov))/2
+
+    for t = 1:n
+
+        # Predict using last iteration's values
+        if t > 1
+
+            At, But, Vt = model.A(t-1), model.B(t-1) * ut, model.V(t-1)
+            AP_pred_t   = At * P_pred_t
+            Kt          = AP_pred_t * Ct' * innov_cov_inv_t
+            Ksparse && (Kt = sparse(Kt))
+
+            x_pred_t = At * x_pred_t + But + Kt * innov_t
+            P_pred_t = any(Wt .!= 0) ? AP_pred_t * (At - Kt * Ct)' + Vt : Vt
+            P_pred_t = (P_pred_t + P_pred_t')/2
+
+        end #if
+
+        # Assign new values
+        ut  = u[:, t]
+        Ct  = model.C(t)
+        Dut = model.D(t) * ut
+        Wt  = model.W(t)
+
+        # Check for and handle missing observation values
+        missing_obs = !all(y_notnan[:, t])
+        if missing_obs
+            ynnt = y_notnan[:, t]
+            I1, I2 = spdiagm(ynnt), spdiagm(!ynnt)
+            Ct, Dut = I1 * Ct, I1 * Dut
+            Wt = I1 * Wt * I1 + I2 * Wt * I2
+        end #if
+
+        # Compute nessecary filtering quantities
+        innov_t           = y[:, t] - Ct * x_pred_t - Dut
+        innov_cov_t       = Ct * P_pred_t * Ct' + Wt |> full
+        nonzero_innov_cov = all(diag(innov_cov_t) .!= 0)
+        innov_cov_inv_t   = nonzero_innov_cov ? inv(innov_cov_t) : I0ny
+
+        nonzero_innov_cov && (log_likelihood += marginal_likelihood(innov_t, innov_cov_t, innov_cov_inv_t))
+
+    end #for
+
+    return log_likelihood
+
+end #loglikelihood

@@ -78,7 +78,8 @@ facts("Kalman Filter") do
             @fact size(filt.filtered) --> size(smooth.smoothed)
             @fact size(filt.error_cov) --> size(smooth.error_cov)
             @fact size(filt.filtered) --> size(smooth2.smoothed)
-            @fact size(filt.error_cov) --> size(smooth2.error_cov)
+            @fact size(filt.error_cov[:,:,1]) --> size(smooth2.error_cov[1])
+            @fact size(filt.error_cov, 3) --> length(smooth2.error_cov)
         end
 
         context("Linear regression test") do
@@ -103,7 +104,7 @@ facts("Kalman Filter") do
 
             # Repeat with DK smoother
             lm_smooth = kalman_smooth(y_noisy, lm, u=input)
-            stderr = sqrt(lm_smooth.error_cov[1,1,:][:])
+            stderr = Float64[P[1,1] for P in lm_smooth.error_cov] |> sqrt
             @fact all(abs(y_true - lm_smooth.smoothed[:,1]) .< 3*stderr) --> true
             @fact ones(t) * lm_smooth.smoothed[1,2] --> roughly(lm_smooth.smoothed[:, 2], atol=1e-12)
 
@@ -136,10 +137,6 @@ facts("Kalman Filter") do
             context("Correct initial guess") do
                 filt = kalman_filter(y, mod2)
                 @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
-
-                #= x_est = round(filt.predicted[end, :], 3) =#
-                #= display(lineplot(collect(1:size(x, 1)) / fs, vec(filt.predicted[:, 1]), width = 120, title="Filtered State 1: $(x_est[1])")) =#
-                #= display(lineplot(collect(1:size(x, 1)) / fs, vec(filt.predicted[:, 2]), width = 120, title="Filtered State 2: $(x_est[2])")) =#
             end
 
             context("Incorrect initial guess") do
@@ -153,6 +150,12 @@ facts("Kalman Filter") do
                 mod4 = sinusoid_model(4, fs = 256, x0=[1.7, -0.2], W=3.0)
                 filt = kalman_filter(y, mod4)
                 @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
+            end
+
+            context("Standalone log-likelihood function works") do
+                loglik1 = kalman_filter(y, mod2).loglik
+                loglik2 = loglikelihood(y, mod2)
+                @fact loglik1 --> roughly(loglik2)
             end
 
         end
@@ -169,6 +172,31 @@ facts("Kalman Filter") do
             #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 1]), width = 120, title="Smoothed State 1: $(x_est[1])")) =#
             #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 2]), width = 120, title="Smoothed State 2: $(x_est[2])")) =#
         end
+
+        context("Sparse regression test") do
+            # To be fair, not an exemplary example of sparse matrices in action
+            # since the state covariance off-diagonals are small but nonzero
+            n, m, s = 5000, 10, 5.
+            x = 100*rand(n, m)
+            coeffs = randn(m)
+            y = x * coeffs + s*randn(n)
+
+            I_m   = speye(m)
+            I0_m  = spzeros(m,m)
+            S     = diagm(s)
+            mlm   = StateSpaceModel(
+                _->I_m, # A
+                _->I0_m, # V
+                t->x[t,:], # C
+                _->S, # W
+                zeros(m), # x1
+                speye(m) # P1
+            )
+            mlm_smooth = kalman_smooth(y, mlm)
+            @fact ones(n,m) .* mlm_smooth.smoothed[1,:] --> roughly(mlm_smooth.smoothed, atol=1e-12)
+            @fact vec(mlm_smooth.smoothed[1,:]) --> roughly(coeffs, atol=1e-2)
+
+          end
 
     end
 

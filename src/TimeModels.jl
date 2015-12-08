@@ -13,8 +13,8 @@ export
   StateSpaceModel, simulate,
 
   #Kalman
-  kalman_filter, KalmanFiltered,
-  kalman_smooth, KalmanSmoothed,
+  loglikelihood, kalman_filter, KalmanFiltered,
+  kalman_smooth, KalmanSmoothed, KalmanSmoothedMinimal,
 
   # Parameter fitting
   ParametrizedMatrix,
@@ -30,7 +30,10 @@ export
   predict,
 
   # diagnostic tests exports
-  jbtest
+  jbtest,
+
+  # utilities
+  em_checkmodel
 
 # Core functionality
 include("statespacemodel.jl")
@@ -44,5 +47,7 @@ include("GARCH.jl")
 
 # Tests
 include("diagnostic_tests.jl")
+
+include("utilities.jl")
 
 end 
