@@ -101,7 +101,7 @@ function garchFit(data::Vector)
   lower_bounds!(opt,[1e-10, 0.0, 0.0])
   upper_bounds!(opt,[1; 0.3; 0.99])
   min_objective!(opt, garchLike)
-  (minf,minx,ret) = Optim.optimize(opt, [1e-5, 0.09, 0.89])
+  (minf,minx,ret) = NLopt.optimize(opt, [1e-5, 0.09, 0.89])
   converged = minx[1]>0 && all(minx[2:3].>=0) && sum(minx[2:3])<1.0
   H = cdHessian(minx,x->garchLLH(rets,x))
   cvar = -inv(H)
