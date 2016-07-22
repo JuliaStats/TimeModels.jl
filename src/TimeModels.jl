@@ -5,6 +5,7 @@ using Distributions
 using StatsBase
 using TimeSeries 
 using Optim
+using NLopt
 
 import Base: show
 
