@@ -3,14 +3,15 @@ module TimeModels
 using Base.Dates
 using Distributions
 using StatsBase
-using TimeSeries 
+using TimeSeries
 using Optim
 using NLopt
+using Compat
 
 import Base: show
 
 export
-  # General state space model 
+  # General state space model
   StateSpaceModel, simulate,
 
   #Kalman
@@ -19,8 +20,8 @@ export
 
   # Parameter fitting
   ParametrizedMatrix,
-  parametrize_full, parametrize_diag, parametrize_none, 
-  ParametrizedSSM, SSMParameters, fit, 
+  parametrize_full, parametrize_diag, parametrize_none,
+  ParametrizedSSM, SSMParameters, fit,
 
   # ARIMA exports
   arima_statespace,
@@ -51,4 +52,4 @@ include("diagnostic_tests.jl")
 
 include("utilities.jl")
 
-end 
+end

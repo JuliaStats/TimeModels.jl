@@ -1,4 +1,4 @@
-abstract AbstractStateSpaceModel{T <: Real}
+@compat abstract type AbstractStateSpaceModel{T<:Real} end
 
 immutable StateSpaceModel{T} <: AbstractStateSpaceModel{T}
 
@@ -50,7 +50,7 @@ StateSpaceModel{T}(A::Matrix{T}, V::Matrix{T}, C::Matrix{T}, W::Matrix{T},
 	  StateSpaceModel{T}(_->A, _->B, _->V, _->C, _->D, _->W, x1, P1)
 
 function show{T}(io::IO, mod::StateSpaceModel{T})
-    dx, dy = mod.nx, mod.ny 
+    dx, dy = mod.nx, mod.ny
     println("StateSpaceModel{$T}, $dx-D process x $dy-D observations")
     println("Process evolution matrix A:")
     show(mod.A(1))
@@ -93,9 +93,9 @@ end #ParametrizedMatrix
 
 function show{T}(io::IO, cpm::ParametrizedMatrix{T})
 
-    function combinestrelems(a, b) 
+    function combinestrelems(a, b)
         if (a != "") & (b != "")
-          a * " + " * b 
+          a * " + " * b
         elseif (a == "") & (b == "")
           "0"
         else
@@ -131,7 +131,7 @@ Base.length(pm::ParametrizedMatrix) = pm.dims[1] * pm.dims[2]
 Base.size(pm::ParametrizedMatrix) = pm.dims
 Base.size(pm::ParametrizedMatrix, dim::Int) = pm.dims[dim]
 
-function Base.call{T}(pm::ParametrizedMatrix{T}, params::Vector{T})
+@compat (pm::ParametrizedMatrix{T})(params::Vector{T}) where T = function (params)
     @assert pm.np == length(params)
     return pm.np == 0 ?
         reshape(pm.f, pm.dims) :
@@ -245,7 +245,7 @@ SSMParameters{T}(_::T; A::Vector{T}=T[], B::Vector{T}=T[], Q::Vector{T}=T[],
                   x1::Vector{T}=T[], S::Vector{T}=T[]) =
               SSMParameters{T}(A, B, Q, C, D, R, x1, S)
 
-function Base.call{T}(m::ParametrizedSSM{T}, p::SSMParameters{T})
+@compat (m::ParametrizedSSM{T})(p::SSMParameters{T}) where T = function (p)
     A2, B2, Q = m.A2(p.A), m.B2(p.B), m.Q(p.Q)
     C2, D2, R = m.C2(p.C), m.D2(p.D), m.R(p.R)
     A(t) = m.A1(t) * A2 * m.A3(t)
