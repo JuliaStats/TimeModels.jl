@@ -51,7 +51,7 @@ facts("Parameter Estimation") do
                     parametrize_none(ones(1,1)), #Q
                     parametrize_none([1. 0]), #C
                     parametrize_diag([1.]), #R
-                    parametrize_none([1., 1.]''), #x1
+                    parametrize_none([1. 1.]'), #x1
                     parametrize_none(100*eye(2)), #P1
                     G = _->zeros(2,1) #G
                 )
@@ -90,7 +90,7 @@ facts("Parameter Estimation") do
                 parametrize_diag(ones(1)), #R
                 parametrize_full(zeros(3,1)), #x1
                 parametrize_none(eye(3)), #S
-                G=_->zeros(3,1), C1=t->X[t,:]
+                G=_->zeros(3,1), C1=t->X[t:t, :]
             )
 
             lm_params = SSMParameters(1., R=ones(1), x1=100*randn(3))
@@ -105,7 +105,7 @@ facts("Parameter Estimation") do
                 parametrize_none(.16*ones(1,1)), #R
                 parametrize_none(coeffs+[.2,.3,.5].*randn(3,1)), #x1
                 parametrize_diag(ones(3)), #S
-                G=_->zeros(3,1), C1=t->X[t,:]
+                G=_->zeros(3,1), C1=t->X[t:t, :]
             )
             lm_params = SSMParameters(1., S=100*ones(3))
             fitm_params, fitm = fit(Y, lm, lm_params)
@@ -116,9 +116,9 @@ facts("Parameter Estimation") do
         context("With exogenous inputs") do
 
             s1, s2, s3 = 1., 2., 3.
-            input = 100*[sin(t/2+0.1) sin(t/4+.1) cos(t/2+.1) cos(t/4+.1)] + 10
+            input = 100.*[sin.(t./2 .+ 0.1) sin.(t./4 .+ .1) cos.(t./2 .+ .1) cos.(t./4 .+ .1)] .+ 10
             y_noisy = [y_true zeros(length(t)) -y_true] +
-                        [input[:,1]+input[:,2] input[:,1]+input[:,3] input[:,3]+input[:,4]] +
+                        [input[:,1] + input[:,2] input[:,1] + input[:,3] input[:,3] + input[:,4]] +
                         [s1 s2 s3] .* randn(length(t), 3)
 
             lm = ParametrizedSSM(
@@ -126,7 +126,7 @@ facts("Parameter Estimation") do
                   parametrize_none(eye(1)), #Q
                   parametrize_none([1. 0; 0 0; -1 0]), #C
                   parametrize_diag(ones(3)), #R
-                  parametrize_none([2., 5.]''), #x1
+                  parametrize_none([2. 5.]'), #x1
                   parametrize_none(0.001*eye(2)), #P1
                   B2=parametrize_none(zeros(2,4)), #B
                   G=_->zeros(2,1), #G

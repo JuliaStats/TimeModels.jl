@@ -86,9 +86,9 @@ facts("Kalman Filter") do
             m, b, s, dt = 5, 2, 2, .1
             t = 0:dt:10
             y_true = m*t + b
-            input = 100*[sin(t/2) sin(t/4) cos(t/2) cos(t/4)] + 10
+            input = 100*[sin.(t./2) sin.(t./4) cos.(t./2) cos.(t./4)] .+ 10
             y_noisy = [y_true zeros(length(t)) -y_true] +
-                        100*[sin(t/2)+sin(t/4) sin(t/2)+cos(t/2) cos(t/2)+cos(t/4)] + 10 + randn(length(t), 3)
+                        100*[sin.(t./2) + sin.(t./4) sin.(t./2) + cos.(t./2) cos.(t./2) + cos.(t./4)] .+ 10 .+ randn(length(t), 3)
             lm = StateSpaceModel([1 dt; 0 1], zeros(2,2),
                                   [1. 0; 0 0; -1 0], s*eye(3),
                                   zeros(2), 100*eye(2),
@@ -97,14 +97,14 @@ facts("Kalman Filter") do
             @fact lm_filt.filtered[end,1] --> roughly(y_true[end, 1], atol=3*sqrt(lm_filt.error_cov[1,1,end]))
 
             lm_smooth = kalman_smooth(lm_filt)
-            stderr = sqrt(lm_smooth.error_cov[1,1,:][:])
-            @fact lm_filt.filtered[end,:] --> lm_smooth.smoothed[end,:]
+            stderr = sqrt.(lm_smooth.error_cov[1:1,1:1,:][:])
+            @fact lm_filt.filtered[end:end,:] --> lm_smooth.smoothed[end:end,:]
             @fact all(abs(y_true - lm_smooth.smoothed[:,1]) .< 3*stderr) --> true
             @fact ones(t) * lm_smooth.smoothed[1,2] --> roughly(lm_smooth.smoothed[:, 2], atol=1e-12)
 
             # Repeat with DK smoother
             lm_smooth = kalman_smooth(y_noisy, lm, u=input)
-            stderr = Float64[P[1,1] for P in lm_smooth.error_cov] |> sqrt
+            stderr = sqrt.(Float64[P[1,1] for P in lm_smooth.error_cov])
             @fact all(abs(y_true - lm_smooth.smoothed[:,1]) .< 3*stderr) --> true
             @fact ones(t) * lm_smooth.smoothed[1,2] --> roughly(lm_smooth.smoothed[:, 2], atol=1e-12)
 
@@ -136,20 +136,20 @@ facts("Kalman Filter") do
 
             context("Correct initial guess") do
                 filt = kalman_filter(y, mod2)
-                @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
+                @fact filt.predicted[end, :] --> roughly([0.5, -0.5]; atol= 0.3)
             end
 
             context("Incorrect initial guess") do
                 mod3 = sinusoid_model(4, fs = 256, x0=[1.7, -0.2])
                 filt = kalman_filter(y, mod3)
-                @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
+                @fact filt.predicted[end, :] --> roughly([0.5, -0.5]; atol= 0.3)
 
             end
 
             context("Model error") do
                 mod4 = sinusoid_model(4, fs = 256, x0=[1.7, -0.2], W=3.0)
                 filt = kalman_filter(y, mod4)
-                @fact filt.predicted[end, :] --> roughly([0.5 -0.5]; atol= 0.3)
+                @fact filt.predicted[end, :] --> roughly([0.5, -0.5]; atol= 0.3)
             end
 
             context("Standalone log-likelihood function works") do
@@ -168,7 +168,7 @@ facts("Kalman Filter") do
             smooth = kalman_smooth(y, sinusoid_model(4, fs = 8192, x0=[1.7, -0.2]) )
             @fact mean(smooth.smoothed, 1) --> roughly([0.5 -0.5]; atol= 0.1)
 
-            #= x_est = round(smooth.smoothed[end, :], 3) =#
+            #= x_est = round(smooth.smoothed[end:end, :], 3) =#
             #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 1]), width = 120, title="Smoothed State 1: $(x_est[1])")) =#
             #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 2]), width = 120, title="Smoothed State 2: $(x_est[2])")) =#
         end
@@ -187,14 +187,14 @@ facts("Kalman Filter") do
             mlm   = StateSpaceModel(
                 _->I_m, # A
                 _->I0_m, # V
-                t->x[t,:], # C
+                t->x[t:t,:], # C
                 _->S, # W
                 zeros(m), # x1
                 speye(m) # P1
             )
             mlm_smooth = kalman_smooth(y, mlm)
-            @fact ones(n,m) .* mlm_smooth.smoothed[1,:] --> roughly(mlm_smooth.smoothed, atol=1e-12)
-            @fact vec(mlm_smooth.smoothed[1,:]) --> roughly(coeffs, atol=1e-2)
+            @fact ones(n,m) .* mlm_smooth.smoothed[1:1,:] --> roughly(mlm_smooth.smoothed, atol=1e-12)
+            @fact vec(mlm_smooth.smoothed[1:1,:]) --> roughly(coeffs, atol=1e-2)
 
           end
 

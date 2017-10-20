@@ -1,7 +1,6 @@
-julia 0.4
+julia 0.6
 Distributions
 StatsBase
 TimeSeries 0.5.11
 Optim
 NLopt
-Compat

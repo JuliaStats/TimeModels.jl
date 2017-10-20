@@ -45,14 +45,19 @@ function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=ze
     u = u'
     n = size(y, 2)
 
-    @assert !any(isnan(u))
-    @assert size(y, 1) == model.ny
+    @assert !any(isnan, u)
+    # @assert size(y, 1) == model.ny
+    if size(y, 1) != model.ny
+        @show size(y)
+        @show model.ny
+        error("")
+    end
     @assert size(u, 1) == model.nu
     @assert size(u, 2) == n
 
     I0ny = zeros(model.ny, model.ny)
 
-    y_notnan = !isnan(y)
+    y_notnan = (!).(isnan.(y))
     y = y .* y_notnan
 
     x_pred_t, P_pred_t  = model.x1, model.P1
@@ -105,7 +110,7 @@ function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=ze
         missing_obs = !all(y_notnan[:, t])
         if missing_obs
             ynnt = y_notnan[:, t]
-            I1, I2 = spdiagm(ynnt), spdiagm(!ynnt)
+            I1, I2 = spdiagm(ynnt), spdiagm(.!ynnt)
             Ct, Dut = I1 * Ct, I1 * Dut
             Wt = I1 * Wt * I1 + I2 * Wt * I2
         end #if
