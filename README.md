@@ -2,9 +2,9 @@ TimeModels.jl
 ============
 [![Build Status](https://travis-ci.org/JuliaStats/TimeModels.jl.svg?branch=master)](https://travis-ci.org/JuliaStats/TimeModels.jl)
 [![Coverage Status](https://coveralls.io/repos/JuliaStats/TimeModels.jl/badge.svg?branch=master)](https://coveralls.io/r/JuliaStats/TimeModels.jl?branch=master)
-[![TimeModels](http://pkg.julialang.org/badges/TimeModels_0.4.svg)](http://pkg.julialang.org/?pkg=TimeModels&ver=0.4)
+[![TimeModels](http://pkg.julialang.org/badges/TimeModels_0.6.svg)](http://pkg.julialang.org/?pkg=TimeModels&ver=0.6)
 
-##A Julia package for modeling time series. 
+##A Julia package for modeling time series.
 
 ![Kalman Demo](png/kalman.png)
 ![Experimental acf plot](png/acf_plot.png)
@@ -18,7 +18,7 @@ Generalized Autoregressive Conditional Heteroskedastic ([GARCH](http://en.wikipe
 * garchFit - estimates parameters of univariate normal GARCH process.
 * predict - make prediction using fitted object returned by garchFit
 * garchPkgTest - runs package test (compares model parameters with those obtained using R fGarch)
-* Jarque-Bera residuals test 
+* Jarque-Bera residuals test
 * Error analysis
 
 Analysis of model residuals - currently only Jarque-Bera Test implemented.
@@ -37,22 +37,22 @@ data - data vector
 #### returns:
 Structure containing details of the GARCH fit with the following fields:
 
-* data - orginal data  
-* params - vector of model parameters (omega,alpha,beta)  
-* llh - likelihood  
-* status - status of the solver  
-* converged - boolean convergence status, true if constraints are satisfied  
-* sigma - conditional volatility  
+* data - orginal data
+* params - vector of model parameters (omega,alpha,beta)
+* llh - likelihood
+* status - status of the solver
+* converged - boolean convergence status, true if constraints are satisfied
+* sigma - conditional volatility
 * hessian - Hessian matrix
 * secoef - standard errors
 * tval - t-statistics
-  
+
 ### predict
-make volatility prediction  
+make volatility prediction
 #### arguments:
-fit - fitted object returned by garchFit  
+fit - fitted object returned by garchFit
 #### returns:
-one-step-ahead volatility forecast  
+one-step-ahead volatility forecast
 
 ## Example
 
