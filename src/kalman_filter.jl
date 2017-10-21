@@ -83,7 +83,7 @@ function loglikelihood{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=ze
     @assert size(u, 1) == model.nu
     @assert size(u, 2) == n
 
-    y_notnan = (!).(isnan.(y))
+    y_notnan = .!isnan.(y)
     y = y .* y_notnan
 
     I0ny = zeros(model.ny, model.ny)
