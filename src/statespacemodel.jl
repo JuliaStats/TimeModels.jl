@@ -1,6 +1,6 @@
 abstract type AbstractStateSpaceModel{T<:Real} end
 
-immutable StateSpaceModel{T} <: AbstractStateSpaceModel{T}
+struct StateSpaceModel{T} <: AbstractStateSpaceModel{T}
 
     # Process transition matrix, control matrix, and noise covariance
     A::Function
@@ -36,20 +36,20 @@ immutable StateSpaceModel{T} <: AbstractStateSpaceModel{T}
 end
 
 # Time-dependent constructor
-StateSpaceModel{T}(A::Function, V::Function, C::Function, W::Function,
-                          x1::Vector{T}, P1::Union{Matrix{T}, SparseMatrixCSC{T}};
-                          B::Function=_->zeros(size(V(1), 1), 1),
-                          D::Function=_->zeros(size(W(1), 1), 1)) =
+StateSpaceModel(A::Function, V::Function, C::Function, W::Function,
+                       x1::Vector{T}, P1::Union{Matrix{T}, SparseMatrixCSC{T}};
+                       B::Function=_->zeros(size(V(1), 1), 1),
+                       D::Function=_->zeros(size(W(1), 1), 1)) where {T} =
 	  StateSpaceModel{T}(A, B, V, C, D, W, x1, P1)
 
 # Time-independent constructor
-StateSpaceModel{T}(A::Matrix{T}, V::Matrix{T}, C::Matrix{T}, W::Matrix{T},
-                          x1::Vector{T}, P1::Union{Matrix{T}, SparseMatrixCSC{T}};
-                          B::Matrix{T}=zeros(size(A, 1), 1),
-                          D::Matrix{T}=zeros(size(C, 1), 1)) =
+StateSpaceModel(A::Matrix{T}, V::Matrix{T}, C::Matrix{T}, W::Matrix{T},
+                       x1::Vector{T}, P1::Union{Matrix{T}, SparseMatrixCSC{T}};
+                       B::Matrix{T}=zeros(size(A, 1), 1),
+                       D::Matrix{T}=zeros(size(C, 1), 1)) where {T} =
 	  StateSpaceModel{T}(_->A, _->B, _->V, _->C, _->D, _->W, x1, P1)
 
-function show{T}(io::IO, mod::StateSpaceModel{T})
+function show(io::IO, mod::StateSpaceModel{T}) where T
     dx, dy = mod.nx, mod.ny
     println("StateSpaceModel{$T}, $dx-D process x $dy-D observations")
     println("Process evolution matrix A:")
@@ -68,7 +68,7 @@ end
 
 # Time-independent parametrized matrix type
 # TODO: A more general ParametrizedArray (allowing vectors) could be preferable
-immutable ParametrizedMatrix{T}
+struct ParametrizedMatrix{T}
 
     f::AbstractVector{T}
     D::Union{Matrix{T}, SparseMatrixCSC{T}}
@@ -84,13 +84,13 @@ immutable ParametrizedMatrix{T}
 
 end #ParametrizedMatrix
 
-ParametrizedMatrix{T}(f::Vector{T}, D::Matrix{T}, dims::Tuple{Int, Int}) = ParametrizedMatrix{T}(f, D, dims)
+ParametrizedMatrix(f::Vector{T}, D::Matrix{T}, dims::Tuple{Int, Int}) where {T} = ParametrizedMatrix{T}(f, D, dims)
 
-function ParametrizedMatrix{T}(f::SparseVector{T}, D::SparseMatrixCSC{T}, dims::Tuple{Int, Int})
+function ParametrizedMatrix(f::SparseVector{T}, D::SparseMatrixCSC{T}, dims::Tuple{Int, Int}) where T
     ParametrizedMatrix{T}(f, D, dims)
 end #ParametrizedMatrix
 
-function show{T}(io::IO, cpm::ParametrizedMatrix{T})
+function show(io::IO, cpm::ParametrizedMatrix{T}) where T
 
     function combinestrelems(a, b)
         if (a != "") & (b != "")
@@ -137,10 +137,10 @@ function (pm::ParametrizedMatrix{T})(params::Vector{T}) where {T}
         reshape(pm.f + pm.D * sparse(params), pm.dims)
 end #call
 
-parametrize_full{T}(X::Matrix{T}) =
+parametrize_full(X::Matrix{T}) where {T} =
         ParametrizedMatrix{T}(zeros(length(X)), eye(length(X)), size(X))
 
-function parametrize_diag{T}(x::Vector{T}; sparse=false)
+function parametrize_diag(x::Vector{T}; sparse=false) where T
     n = length(x)
     f = sparse ? spzeros(n^2, 1) : zeros(n^2)
     D = sparse ? spzeros(n^2, n) : zeros(n^2, n)
@@ -148,14 +148,14 @@ function parametrize_diag{T}(x::Vector{T}; sparse=false)
     return ParametrizedMatrix{T}(f, D, (n,n))
 end #parametrize_diag
 
-parametrize_none{T}(X::Matrix{T}) =
+parametrize_none(X::Matrix{T}) where {T} =
         ParametrizedMatrix{T}(vec(X), zeros(length(X), 0), size(X))
 
-parametrize_none{T}(X::SparseMatrixCSC{T}) =
+parametrize_none(X::SparseMatrixCSC{T}) where {T} =
         ParametrizedMatrix{T}(vec(X), spzeros(length(X), 0), size(X))
 
 # Time-independent parametrized state space model
-immutable ParametrizedSSM{T} <: AbstractStateSpaceModel{T}
+struct ParametrizedSSM{T} <: AbstractStateSpaceModel{T}
 
     # Transition equation and noise covariance
 
@@ -207,21 +207,21 @@ immutable ParametrizedSSM{T} <: AbstractStateSpaceModel{T}
 
 end #ParametrizedSSM
 
-ParametrizedSSM{T}(A2::ParametrizedMatrix{T}, Q::ParametrizedMatrix{T},
-                          C2::ParametrizedMatrix{T}, R::ParametrizedMatrix{T},
-                          x1::ParametrizedMatrix{T}, S::ParametrizedMatrix{T};
-                          A1::Function=_->speye(size(A2,1)), A3::Function=_->speye(size(A2,2)),
-                          B1::Function=_->speye(size(x1,1)),
-                          B2::ParametrizedMatrix{T}=parametrize_none(spzeros(size(B1(1),2), 1)),
-                          G::Function=_->speye(size(x1,1)),
-                          C1::Function=_->speye(size(C2, 1)), C3::Function=_->speye(size(C2,2)),
-                          D1::Function=_->speye(size(C1(1),1)),
-                          D2::ParametrizedMatrix{T}=parametrize_none(spzeros(size(C1(1),1), 1)),
-                          H::Function=_->speye(size(C1(1),1)), J::AbstractMatrix=speye(size(x1, 1))) =
+ParametrizedSSM(A2::ParametrizedMatrix{T}, Q::ParametrizedMatrix{T},
+                       C2::ParametrizedMatrix{T}, R::ParametrizedMatrix{T},
+                       x1::ParametrizedMatrix{T}, S::ParametrizedMatrix{T};
+                       A1::Function=_->speye(size(A2,1)), A3::Function=_->speye(size(A2,2)),
+                       B1::Function=_->speye(size(x1,1)),
+                       B2::ParametrizedMatrix{T}=parametrize_none(spzeros(size(B1(1),2), 1)),
+                       G::Function=_->speye(size(x1,1)),
+                       C1::Function=_->speye(size(C2, 1)), C3::Function=_->speye(size(C2,2)),
+                       D1::Function=_->speye(size(C1(1),1)),
+                       D2::ParametrizedMatrix{T}=parametrize_none(spzeros(size(C1(1),1), 1)),
+                       H::Function=_->speye(size(C1(1),1)), J::AbstractMatrix=speye(size(x1, 1))) where {T} =
           ParametrizedSSM{T}(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, J, S)
 
 # State space model parameters
-immutable SSMParameters{T}
+struct SSMParameters{T}
 
     # Process transition and noise covariance
     A::Vector{T}
@@ -239,9 +239,9 @@ immutable SSMParameters{T}
 
 end #SSMParameters
 
-SSMParameters{T}(__::T; A::Vector{T}=T[], B::Vector{T}=T[], Q::Vector{T}=T[],
-                  C::Vector{T}=T[], D::Vector{T}=T[], R::Vector{T}=T[],
-                  x1::Vector{T}=T[], S::Vector{T}=T[]) =
+SSMParameters(__::T; A::Vector{T}=T[], B::Vector{T}=T[], Q::Vector{T}=T[],
+               C::Vector{T}=T[], D::Vector{T}=T[], R::Vector{T}=T[],
+               x1::Vector{T}=T[], S::Vector{T}=T[]) where {T} =
               SSMParameters{T}(A, B, Q, C, D, R, x1, S)
 
 function (m::ParametrizedSSM{T})(p::SSMParameters{T}) where {T}
@@ -281,13 +281,13 @@ function confirm_matrix_sizes(F::AbstractMatrix, B::AbstractMatrix, V::AbstractM
 
 end #confirm_matrix_sizes
 
-function confirm_matrix_sizes{T}(A1::AbstractMatrix, A2::ParametrizedMatrix{T}, A3::AbstractMatrix,
-                              B1::AbstractMatrix, B2::ParametrizedMatrix{T},
-                              G::AbstractMatrix, Q::ParametrizedMatrix{T},
-                              C1::AbstractMatrix, C2::ParametrizedMatrix{T}, C3::AbstractMatrix,
-                              D1::AbstractMatrix, D2::ParametrizedMatrix{T},
-                              H::AbstractMatrix, R::ParametrizedMatrix{T},
-                              x1::ParametrizedMatrix{T}, J::AbstractMatrix, S::ParametrizedMatrix{T})
+function confirm_matrix_sizes(A1::AbstractMatrix, A2::ParametrizedMatrix{T}, A3::AbstractMatrix,
+                           B1::AbstractMatrix, B2::ParametrizedMatrix{T},
+                           G::AbstractMatrix, Q::ParametrizedMatrix{T},
+                           C1::AbstractMatrix, C2::ParametrizedMatrix{T}, C3::AbstractMatrix,
+                           D1::AbstractMatrix, D2::ParametrizedMatrix{T},
+                           H::AbstractMatrix, R::ParametrizedMatrix{T},
+                           x1::ParametrizedMatrix{T}, J::AbstractMatrix, S::ParametrizedMatrix{T}) where T
 
     @assert size(B2, 2) == size(D2, 2)
 
@@ -345,7 +345,7 @@ Arguments:
   u : Array (optional)
   n x nu array of exogenous inputs
 "
-function simulate{T}(model::StateSpaceModel{T}, n::Int; u::Array{T}=zeros(n, model.nu))
+function simulate(model::StateSpaceModel{T}, n::Int; u::Array{T}=zeros(n, model.nu)) where T
     @assert size(u, 1) == n
     @assert size(u, 2) == model.nu
 

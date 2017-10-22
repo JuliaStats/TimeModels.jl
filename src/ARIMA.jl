@@ -2,8 +2,8 @@
 # vectors of AR and MA coefficients and a number of differences.
 # This implementation is based on Section 8.3 in Brockwell and Davis 2002,
 # "Introduction to Time Series and Forecasting," 2nd ed.
-function arima_statespace{T, I<:Integer}(ar::Vector{T}, d::I, ma::Vector{T}, 
-		sigma::T)
+function arima_statespace(ar::Vector{T}, d::I, ma::Vector{T}, 
+		sigma::T) where {T, I<:Integer}
 	p = length(ar)
 	q = length(ma)
 	r = max(p, q + 1)
@@ -30,7 +30,7 @@ function arima_statespace{T, I<:Integer}(ar::Vector{T}, d::I, ma::Vector{T},
 	StateSpaceModel(F, V, G, W, x0, P0)
 end
 
-function arima{T, I<:Integer}(y::Vector{T}, p::I, d::I, q::I)
+function arima(y::Vector{T}, p::I, d::I, q::I) where {T, I<:Integer}
 	build(par::Vector{T}) = arima_statespace(par[1:p], par[p+1], par[p+2:end])
 	par0 = zeros(p + d + q)
 	fit(y, build, par0)
