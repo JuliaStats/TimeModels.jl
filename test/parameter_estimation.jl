@@ -9,7 +9,7 @@ function build(theta)
     StateSpaceModel(F, V, G, W, x0, P0)
 end
 
-facts("Parameter Estimation") do
+@testset "Parameter Estimation" begin
 
     #=
     context("Nonlinear solver") do
@@ -35,13 +35,13 @@ facts("Parameter Estimation") do
     end
     =#
 
-    context("Parameter estimation with constraints") do
+    @testset "Parameter estimation with constraints" begin
 
         m, b, dt = 5, 2, .1
         t = 0:dt:200
         y_true = m*t + b
 
-        context("Without exogenous inputs") do
+        @testset "Without exogenous inputs" begin
 
             s = 2
             y_noisy = y_true + s*randn(length(t))
@@ -51,13 +51,13 @@ facts("Parameter Estimation") do
                     parametrize_none(ones(1,1)), #Q
                     parametrize_none([1. 0]), #C
                     parametrize_diag([1.]), #R
-                    parametrize_none([1., 1.]''), #x1
+                    parametrize_none([1. 1.]'), #x1
                     parametrize_none(100*eye(2)), #P1
                     G = _->zeros(2,1) #G
                 )
             lm_params = SSMParameters(1., R=rand(1))
             fitm_params, fitm = fit(y_noisy, lm, lm_params)
-            @fact sqrt(fitm_params.R[1]) --> roughly(s, atol=0.1)
+            @test sqrt(fitm_params.R[1]) ≈ s atol=0.1
 
             A = [.5 .1 .4; .25 .8 .5; .25 .1 .1]
             model = StateSpaceModel(A, diagm([.01,.01,.01]),
@@ -77,8 +77,8 @@ facts("Parameter Estimation") do
 
             lm_params = SSMParameters(1., A=rand(3), Q=rand(3))
             fitm_params, fitm = fit(y, lm, lm_params)
-            @fact fitm_params.A --> roughly([.5, .8, .4], atol=0.2)
-            @fact fitm_params.Q --> roughly([.01, .01, .01], atol=0.05)
+            @test fitm_params.A ≈ [.5, .8, .4] atol=0.2
+            @test fitm_params.Q ≈ [.01, .01, .01] atol=0.05
 
             coeffs = randn(3)
             X = randn(200,3)
@@ -90,13 +90,13 @@ facts("Parameter Estimation") do
                 parametrize_diag(ones(1)), #R
                 parametrize_full(zeros(3,1)), #x1
                 parametrize_none(eye(3)), #S
-                G=_->zeros(3,1), C1=t->X[t,:]
+                G=_->zeros(3,1), C1=t->X[t:t, :]
             )
 
             lm_params = SSMParameters(1., R=ones(1), x1=100*randn(3))
             fitm_params, fitm = fit(Y, lm, lm_params)
-            @fact fitm_params.x1 --> roughly(coeffs, atol=0.1)
-            @fact fitm_params.R[1] --> roughly(.16, atol=0.05)
+            @test fitm_params.x1   ≈ coeffs atol=0.1
+            @test fitm_params.R[1] ≈ .16    atol=0.05
 
             lm = ParametrizedSSM(
                 parametrize_none(eye(3)), #A
@@ -105,20 +105,20 @@ facts("Parameter Estimation") do
                 parametrize_none(.16*ones(1,1)), #R
                 parametrize_none(coeffs+[.2,.3,.5].*randn(3,1)), #x1
                 parametrize_diag(ones(3)), #S
-                G=_->zeros(3,1), C1=t->X[t,:]
+                G=_->zeros(3,1), C1=t->X[t:t, :]
             )
             lm_params = SSMParameters(1., S=100*ones(3))
             fitm_params, fitm = fit(Y, lm, lm_params)
-            @fact fitm_params.S --> roughly([.2,.3,.5].^2, atol=0.15)
+            @test fitm_params.S ≈ [.2,.3,.5].^2 atol=0.15
 
         end
 
-        context("With exogenous inputs") do
+        @testset "With exogenous inputs" begin
 
             s1, s2, s3 = 1., 2., 3.
-            input = 100*[sin(t/2+0.1) sin(t/4+.1) cos(t/2+.1) cos(t/4+.1)] + 10
+            input = 100.*[sin.(t./2 .+ 0.1) sin.(t./4 .+ .1) cos.(t./2 .+ .1) cos.(t./4 .+ .1)] .+ 10
             y_noisy = [y_true zeros(length(t)) -y_true] +
-                        [input[:,1]+input[:,2] input[:,1]+input[:,3] input[:,3]+input[:,4]] +
+                        [input[:,1] + input[:,2] input[:,1] + input[:,3] input[:,3] + input[:,4]] +
                         [s1 s2 s3] .* randn(length(t), 3)
 
             lm = ParametrizedSSM(
@@ -126,7 +126,7 @@ facts("Parameter Estimation") do
                   parametrize_none(eye(1)), #Q
                   parametrize_none([1. 0; 0 0; -1 0]), #C
                   parametrize_diag(ones(3)), #R
-                  parametrize_none([2., 5.]''), #x1
+                  parametrize_none([2. 5.]'), #x1
                   parametrize_none(0.001*eye(2)), #P1
                   B2=parametrize_none(zeros(2,4)), #B
                   G=_->zeros(2,1), #G
@@ -134,8 +134,8 @@ facts("Parameter Estimation") do
             )
             lm_params = SSMParameters(1., R=rand(3), D=randn(12))
             fitm_params, fitm = fit(y_noisy, lm, lm_params, u=input)
-            @fact fitm_params.D --> roughly(vec([1. 1 0 0; 1 0 1 0; 0 0 1 1]), atol=.1)
-            @fact sqrt(fitm_params.R) --> roughly([s1, s2, s3], atol=.15)
+            @test fitm_params.D       ≈ vec([1. 1 0 0; 1 0 1 0; 0 0 1 1]) atol=.1
+            @test sqrt.(fitm_params.R) ≈ [s1, s2, s3] atol=.15
 
             y_noisy = [0 0 0;
                   [input[:,1]+input[:,2] input[:,1]+input[:,3] input[:,3]+input[:,4]][1:end-1, :]] +
@@ -154,7 +154,7 @@ facts("Parameter Estimation") do
             )
             lm_params = SSMParameters(1., Q=rand(3))
             fitm_params, fitm = fit(y_noisy, lm, lm_params, u=input)
-            @fact sqrt(fitm_params.Q) --> roughly([s1, s2, s3], atol=.1)
+            @test sqrt.(fitm_params.Q) ≈ [s1, s2, s3] atol=.1
 
             lm = ParametrizedSSM(
                   parametrize_none(zeros(3,3)), #A
@@ -169,7 +169,7 @@ facts("Parameter Estimation") do
             )
             lm_params = SSMParameters(1., B=randn(12))
             fitm_params, fitm = fit(y_noisy, lm, lm_params, u=input)
-            @fact fitm_params.B --> roughly(vec([1. 1 0 0; 1 0 1 0; 0 0 1 1]), atol=.11)
+            @test fitm_params.B ≈ vec([1. 1 0 0; 1 0 1 0; 0 0 1 1]) atol=.11
 
             y_noisy = [0; .5input[1:end-1,1] - .8input[1:end-1,2] - .3input[1:end-1,3] + .7input[1:end-1,4]] + s2*randn(length(t))
 
@@ -186,8 +186,8 @@ facts("Parameter Estimation") do
             )
             lm_params = SSMParameters(1., C=randn(4), R=rand(1))
             fitm_params, fitm = fit(y_noisy, lm, lm_params, u=input)
-            @fact fitm_params.C --> roughly([.5, -.8, -.3, .7], atol=.1)
-            @fact sqrt(fitm_params.R[1]) --> roughly(s2, atol=.1)
+            @test fitm_params.C ≈ [.5, -.8, -.3, .7] atol=.1
+            @test sqrt(fitm_params.R[1]) ≈ s2 atol=.1
 
         end
 

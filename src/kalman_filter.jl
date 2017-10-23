@@ -26,7 +26,7 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=ze
     function kalman_recursions(y_i::Vector{T}, u_i::Vector{T},
                                   C_i::Matrix{T}, D_i::Matrix{T}, W_i::Matrix{T},
                                   x_pred_i::Vector{T}, P_pred_i::Matrix{T})
-        if !any(isnan(y_i))
+        if !any(isnan, y_i)
             innov =  y_i - C_i * x_pred_i - D_i * u_i
             S = C_i * P_pred_i * C_i' + W_i  # Innovation covariance
             K = P_pred_i * C_i' / S # Kalman gain
@@ -78,12 +78,12 @@ function loglikelihood{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=ze
     y, u = y', u'
     n = size(y, 2)
 
-    @assert !any(isnan(u))
+    @assert !any(isnan, u)
     @assert size(y, 1) == model.ny
     @assert size(u, 1) == model.nu
     @assert size(u, 2) == n
 
-    y_notnan = !isnan(y)
+    y_notnan = .!isnan.(y)
     y = y .* y_notnan
 
     I0ny = zeros(model.ny, model.ny)

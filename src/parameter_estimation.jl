@@ -17,7 +17,7 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
     y_orig = copy(y)
     y = y'
-    y_notnan = !isnan(y)
+    y_notnan = (!).(isnan.(y))
     y = y .* y_notnan
 
     u_orig = copy(u)
@@ -43,10 +43,12 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
     Id_x1                 = spdiagm(x1_deterministic)
 
     if any(x_deterministic)
-        OQ0, OQp = I_nx[find(x_deterministic), :], I_nx[find(!x_deterministic), :]
-        Id(M_t::Array{Int,2}) = spdiagm(OQ0' * all((OQ0 * M_t * OQp') .== 0, 2)[:])
+        OQ0, OQp = I_nx[find(x_deterministic), :], I_nx[find((!).(x_deterministic)), :]
+        # Id(M_t::Array{Int,2}) = spdiagm(OQ0' * all((OQ0 * M_t * OQp') .== 0, 2)[:])
+        Id = M_t -> spdiagm(OQ0' * all((OQ0 * M_t * OQp') .== 0, 2)[:])
     else
-        Id(_::Array{Int,2}) = I0_nx
+        # Id(_::Array{Int,2}) = I0_nx
+        Id = t -> I0_nx
     end
 
     phi(t)  = (pmodel.G(t)' * pmodel.G(t)) \ pmodel.G(t)'
@@ -85,7 +87,7 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
         =#
 
         if estimate_A || estimate_B || estimate_Q || estimate_x1
-            Qinv    = inv(pmodel.Q(params.Q))  
+            Qinv    = inv(pmodel.Q(params.Q))
             Vinv_   = all_x_deterministic ? I0_nx : phi(1)' * Qinv * phi(1)
         end #if ABQ
 
@@ -104,7 +106,7 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
         function N(t::Int)
             HRHt = HRH(t)
-            O = I_ny[find(y_notnan[:, t] & HRH_nonzero_rows(t)), :]
+            O = I_ny[find(y_notnan[:, t] .& HRH_nonzero_rows(t)), :]
             return I - HRHt * O' * inv(O * HRHt * O') * O
         end #N
 
@@ -221,7 +223,7 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
                     end #if C
 
                     if estimate_R
-                        I2 = diagm(!y_notnan[:, t])
+                        I2 = diagm(.!y_notnan[:, t])
                         eyy = I2 * (Nt * HRH(t) + Nt * Ct * Pt * Ct' * Nt') * I2 + ey * ey'
                         R_S1 += pmodel.R.D' * pmodel.R.D
                         R_S2 += pmodel.R.D' * vec(xi(t) * (eyy - eyx * Ct' -
@@ -324,7 +326,7 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
     ll, ll_prev = Inf, Inf
 
     while (niter > 0) && (fraction_change(ll_prev, ll) > eps)
-        ll_prev = ll 
+        ll_prev = ll
         ll      = em_kernel!(params)
         niter -= 1
     end #while

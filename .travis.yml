@@ -1,13 +1,16 @@
 language: julia
+dist: trusty
+sudo: false
 os:
   - linux
 julia:
-  - 0.4
+  - 0.6
+  - nightly
 notifications:
   email: false
-sudo: false
-script:
-  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - julia -e 'Pkg.clone(pwd()); Pkg.build("TimeModels"); Pkg.test("TimeModels", coverage=true)'
+addons:
+  apt:
+    packages:
+      - libnlopt0
 after_success:
   - julia -e 'cd(Pkg.dir("TimeModels")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(process_folder())'

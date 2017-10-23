@@ -1,4 +1,4 @@
-abstract AbstractStateSpaceModel{T <: Real}
+abstract type AbstractStateSpaceModel{T<:Real} end
 
 immutable StateSpaceModel{T} <: AbstractStateSpaceModel{T}
 
@@ -21,11 +21,11 @@ immutable StateSpaceModel{T} <: AbstractStateSpaceModel{T}
     ny::Int
     nu::Int
 
-    function StateSpaceModel(A::Function, B::Function, V::Function,
+    function StateSpaceModel{T}(A::Function, B::Function, V::Function,
                                 C::Function, D::Function, W::Function,
-                                x1::Vector{T}, P1::Union{Matrix{T}, SparseMatrixCSC{T}})
+                                x1::Vector{T}, P1::Union{Matrix{T}, SparseMatrixCSC{T}}) where {T}
 
-        ispossemidef(x::AbstractMatrix) = issym(x) && (eigmin(full(x)) >= 0)
+        ispossemidef(x::AbstractMatrix) = issymmetric(x) && (eigmin(full(x)) >= 0)
         @assert ispossemidef(V(1))
         @assert ispossemidef(W(1))
         @assert ispossemidef(P1)
@@ -50,7 +50,7 @@ StateSpaceModel{T}(A::Matrix{T}, V::Matrix{T}, C::Matrix{T}, W::Matrix{T},
 	  StateSpaceModel{T}(_->A, _->B, _->V, _->C, _->D, _->W, x1, P1)
 
 function show{T}(io::IO, mod::StateSpaceModel{T})
-    dx, dy = mod.nx, mod.ny 
+    dx, dy = mod.nx, mod.ny
     println("StateSpaceModel{$T}, $dx-D process x $dy-D observations")
     println("Process evolution matrix A:")
     show(mod.A(1))
@@ -70,13 +70,13 @@ end
 # TODO: A more general ParametrizedArray (allowing vectors) could be preferable
 immutable ParametrizedMatrix{T}
 
-    f::Union{Vector{T}, SparseMatrixCSC{T, Int}}
+    f::AbstractVector{T}
     D::Union{Matrix{T}, SparseMatrixCSC{T}}
     np::Int
     dims::Tuple{Int, Int}
 
-    function ParametrizedMatrix(f::Union{Vector{T}, SparseMatrixCSC{T, Int}},
-                D::Union{Matrix{T}, SparseMatrixCSC{T, Int}}, dims::Tuple{Int, Int})
+    function ParametrizedMatrix{T}(f::AbstractVector{T},
+                D::Union{Matrix{T}, SparseMatrixCSC{T, Int}}, dims::Tuple{Int, Int}) where {T}
         @assert length(f) == size(D, 1)
         @assert length(f) == dims[1] * dims[2]
         new(f, D, size(D, 2), dims)
@@ -86,16 +86,15 @@ end #ParametrizedMatrix
 
 ParametrizedMatrix{T}(f::Vector{T}, D::Matrix{T}, dims::Tuple{Int, Int}) = ParametrizedMatrix{T}(f, D, dims)
 
-function ParametrizedMatrix{T}(f::SparseMatrixCSC{T}, D::SparseMatrixCSC{T}, dims::Tuple{Int, Int})
-    @assert size(f, 2) == 1
+function ParametrizedMatrix{T}(f::SparseVector{T}, D::SparseMatrixCSC{T}, dims::Tuple{Int, Int})
     ParametrizedMatrix{T}(f, D, dims)
 end #ParametrizedMatrix
 
 function show{T}(io::IO, cpm::ParametrizedMatrix{T})
 
-    function combinestrelems(a, b) 
+    function combinestrelems(a, b)
         if (a != "") & (b != "")
-          a * " + " * b 
+          a * " + " * b
         elseif (a == "") & (b == "")
           "0"
         else
@@ -119,7 +118,7 @@ function show{T}(io::IO, cpm::ParametrizedMatrix{T})
                 paramelems[j] = string(cpm.D[i,j],Char(96+j))
             end #if
         end #for
-        paramstring[i] = reduce(combinestrelems, paramelems)
+        paramstring[i] = isempty(paramelems) ? "0" : reduce(combinestrelems, paramelems)
     end #for
 
     finalstrings = map(combinestrelems, conststring, paramstring)
@@ -131,7 +130,7 @@ Base.length(pm::ParametrizedMatrix) = pm.dims[1] * pm.dims[2]
 Base.size(pm::ParametrizedMatrix) = pm.dims
 Base.size(pm::ParametrizedMatrix, dim::Int) = pm.dims[dim]
 
-function Base.call{T}(pm::ParametrizedMatrix{T}, params::Vector{T})
+function (pm::ParametrizedMatrix{T})(params::Vector{T}) where {T}
     @assert pm.np == length(params)
     return pm.np == 0 ?
         reshape(pm.f, pm.dims) :
@@ -194,13 +193,13 @@ immutable ParametrizedSSM{T} <: AbstractStateSpaceModel{T}
     nr::Int
     ns::Int
 
-    function ParametrizedSSM(A1::Function, A2::ParametrizedMatrix{T}, A3::Function,
+    function ParametrizedSSM{T}(A1::Function, A2::ParametrizedMatrix{T}, A3::Function,
                                 B1::Function, B2::ParametrizedMatrix{T},
                                 G::Function, Q::ParametrizedMatrix{T},
                                 C1::Function, C2::ParametrizedMatrix{T}, C3::Function,
                                 D1::Function, D2::ParametrizedMatrix{T},
                                 H::Function, R::ParametrizedMatrix{T},
-                                x1::ParametrizedMatrix{T}, J::AbstractMatrix, S::ParametrizedMatrix{T})
+                                x1::ParametrizedMatrix{T}, J::AbstractMatrix, S::ParametrizedMatrix{T}) where {T}
         nx, ny, nu, nq, nr, ns = confirm_matrix_sizes(A1(1), A2, A3(1), B1(1), B2, G(1), Q,
                                               C1(1), C2, C3(1), D1(1), D2, H(1), R, x1, J, S)
         new(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, J, S, nx, ny, nu, nq, nr, ns)
@@ -240,12 +239,12 @@ immutable SSMParameters{T}
 
 end #SSMParameters
 
-SSMParameters{T}(_::T; A::Vector{T}=T[], B::Vector{T}=T[], Q::Vector{T}=T[],
+SSMParameters{T}(__::T; A::Vector{T}=T[], B::Vector{T}=T[], Q::Vector{T}=T[],
                   C::Vector{T}=T[], D::Vector{T}=T[], R::Vector{T}=T[],
                   x1::Vector{T}=T[], S::Vector{T}=T[]) =
               SSMParameters{T}(A, B, Q, C, D, R, x1, S)
 
-function Base.call{T}(m::ParametrizedSSM{T}, p::SSMParameters{T})
+function (m::ParametrizedSSM{T})(p::SSMParameters{T}) where {T}
     A2, B2, Q = m.A2(p.A), m.B2(p.B), m.Q(p.Q)
     C2, D2, R = m.C2(p.C), m.D2(p.D), m.R(p.R)
     A(t) = m.A1(t) * A2 * m.A3(t)
@@ -357,8 +356,8 @@ function simulate{T}(model::StateSpaceModel{T}, n::Int; u::Array{T}=zeros(n, mod
 
     # Cholesky decompositions of the covariance matrices, for generating
     # random noise
-    V_chol(t) = all(model.V(t) .== 0) ? model.V(t) : chol(model.V(t), Val{:L})
-    W_chol(t) = all(model.W(t) .== 0) ? model.W(t) : chol(model.W(t), Val{:L})
+    V_chol(t) = all(model.V(t) .== 0) ? model.V(t) : chol(Hermitian(model.V(t), :L))
+    W_chol(t) = all(model.W(t) .== 0) ? model.W(t) : chol(Hermitian(model.W(t), :L))
 
     # Generate the series
     x[:, 1] = model.x1
