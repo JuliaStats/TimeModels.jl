@@ -1,7 +1,7 @@
 # ML parameter estimation with filter result log-likelihood (via Nelder-Mead)
 
-function fit{T}(y::Matrix{T}, build::Function, theta0::Vector{T};
-          u::Array{T}=zeros(size(y,1), build(theta0).nu))
+function fit(y::Matrix{T}, build::Function, theta0::Vector{T};
+       u::Array{T}=zeros(size(y,1), build(theta0).nu)) where T
     objective(theta) = kalman_filter(y, build(theta), u=u).loglik
     kfit = Optim.optimize(objective, theta0)
     return (kfit.minimum, build(kfit.minimum), filter(y, build(kfit.minimum)))
@@ -9,8 +9,8 @@ end #fit
 
 # Expectation-Maximization (EM) parameter estimation
 
-function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
-          u::Array{T}=zeros(size(y,1), pmodel.nu), eps::Float64=1e-6, niter::Int=typemax(Int))
+function fit(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
+       u::Array{T}=zeros(size(y,1), pmodel.nu), eps::Float64=1e-6, niter::Int=typemax(Int)) where T
 
     n = size(y, 1)
     @assert n == size(u, 1)
@@ -62,7 +62,7 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
     estimate_A, estimate_B, estimate_Q, estimate_C, estimate_D, estimate_R,
         estimate_x1, estimate_S = map(x->x>0, [na, nb, nq, nc, nd, nr, nx1, ns])
 
-    function em_kernel!{T}(params::SSMParameters{T})
+    function em_kernel!(params::SSMParameters{T}) where T
 
         m = pmodel(params)
 
@@ -337,8 +337,8 @@ function fit{T}(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
 end #fit
 
-function fit{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu),
-              eps::Float64=1e-6, niter::Int=typemax(Int))
+function fit(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu),
+           eps::Float64=1e-6, niter::Int=typemax(Int)) where T
 
     # B, Z, x1 default to parametrized as fully unconstrained
     A, A_params = parametrize_full(model.A(1))

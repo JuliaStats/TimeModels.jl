@@ -2,7 +2,7 @@
 # Copyright 2013 Andrey Kolev
 # Distributed under MIT license (see LICENSE.md)
 
-type GarchFit
+mutable struct GarchFit
   data::Vector
   params::Vector
   llh::Float64

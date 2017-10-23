@@ -1,4 +1,4 @@
-type KalmanFiltered{T}
+mutable struct KalmanFiltered{T}
     filtered::Array{T}
     predicted::Array{T}
     error_cov::Array{T}
@@ -9,7 +9,7 @@ type KalmanFiltered{T}
     loglik::T
 end
 
-function Base.show{T}(io::IO, filt::KalmanFiltered{T})
+function Base.show(io::IO, filt::KalmanFiltered{T}) where T
     n = size(filt.y, 1)
     dx, dy = filt.model.nx, filt.model.ny
     println("KalmanFiltered{$T}")
@@ -17,7 +17,7 @@ function Base.show{T}(io::IO, filt::KalmanFiltered{T})
     println("Negative log-likelihood: $(filt.loglik)")
 end
 
-function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu))
+function kalman_filter(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu)) where T
 
     @assert size(u,1) == size(y,1)
     @assert size(y,2) == model.ny
@@ -72,7 +72,7 @@ function kalman_filter{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=ze
     return KalmanFiltered(x_filt', x_pred', P_filt, P_pred, model, y', u', log_likelihood)
 end
 
-function loglikelihood{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu))
+function loglikelihood(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu)) where T
 
 
     y, u = y', u'

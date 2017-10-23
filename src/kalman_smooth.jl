@@ -1,4 +1,4 @@
-type KalmanSmoothed{T}
+mutable struct KalmanSmoothed{T}
 	predicted::Array{T}
 	filtered::Array{T}
 	smoothed::Array{T}
@@ -9,7 +9,7 @@ type KalmanSmoothed{T}
 	loglik::T
 end
 
-type KalmanSmoothedMinimal{T}
+mutable struct KalmanSmoothedMinimal{T}
 	y::Array{T}
 	smoothed::Array{T}
 	error_cov::Union{Vector{Matrix{T}}, Vector{SparseMatrixCSC{T, Int}}}
@@ -18,7 +18,7 @@ type KalmanSmoothedMinimal{T}
 	loglik::T
 end
 
-function show{T}(io::IO, smoothed::KalmanSmoothed{T})
+function show(io::IO, smoothed::KalmanSmoothed{T}) where T
     n = size(smoothed.y, 1)
     dx, dy = smoothed.model.nx, smoothed.model.ny
     println("KalmanSmoothed{$T}")
@@ -26,7 +26,7 @@ function show{T}(io::IO, smoothed::KalmanSmoothed{T})
     println("Negative log-likelihood: $(smoothed.loglik)")
 end
 
-function show{T}(io::IO, smoothed::KalmanSmoothedMinimal{T})
+function show(io::IO, smoothed::KalmanSmoothedMinimal{T}) where T
     n = size(smoothed.y, 1)
     dx, dy = smoothed.model.nx, smoothed.model.ny
     println("KalmanSmoothedMinimal{$T}")
@@ -35,7 +35,7 @@ function show{T}(io::IO, smoothed::KalmanSmoothedMinimal{T})
 end
 
 # Durbin-Koopman Smoothing
-function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu))
+function kalman_smooth(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu)) where T
 
     Ksparse = issparse(model.A(1)) && issparse(model.V(1)) && issparse(model.C(1))
 
@@ -154,7 +154,7 @@ function kalman_smooth{T}(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=ze
 
 end #smooth
 
-function lag1_smooth{T}(y::Array{T}, u::Array{T}, m::StateSpaceModel{T})
+function lag1_smooth(y::Array{T}, u::Array{T}, m::StateSpaceModel{T}) where T
 
     A_0, A_I  = zeros(m.A(1)), eye(m.A(1))
     B_0, V_0, C_0 = zeros(m.B(1)), zeros(m.V(1)), zeros(m.C(1))
