@@ -4,7 +4,9 @@ TimeModels.jl
 [![Coverage Status](https://coveralls.io/repos/JuliaStats/TimeModels.jl/badge.svg?branch=master)](https://coveralls.io/r/JuliaStats/TimeModels.jl?branch=master)
 [![TimeModels](http://pkg.julialang.org/badges/TimeModels_0.6.svg)](http://pkg.julialang.org/?pkg=TimeModels&ver=0.6)
 
-##A Julia package for modeling time series.
+## Please note: Currently unmaintained and not guaranteed to work with Julia 0.6!
+
+## A Julia package for modeling time series.
 
 ![Kalman Demo](png/kalman.png)
 ![Experimental acf plot](png/acf_plot.png)
