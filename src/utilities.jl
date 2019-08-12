@@ -1,13 +1,13 @@
 function em_checkmodel(pmodel::ParametrizedSSM, params::SSMParameters)
-  
+
     allzero(x::Matrix) = all(x .== 0)
 
     m = pmodel(params)
     C = m.C(1)
 
-    I_x, I_u  = eye(m.nx), eye(m.nu)
-    I_q0      = all(pmodel.G(1) .== 0, 2) |> vec |> float |> diagm
-    I_r0      = all(pmodel.H(1) .== 0, 2) |> vec |> float |> diagm
+    I_x, I_u  = Matrix(1.0I, m.nx, m.nx), Matrix(1.0I, m.nu, m.nu)
+    I_q0      = diagm(0 => all(pmodel.G(1) .== 0, 2) |> vec |> float)
+    I_r0      = diagm(0 => all(pmodel.H(1) .== 0, 2) |> vec |> float)
     M         = m.A(1) .!= 0 |> float
     #I_is_q    = M^m.nx  #TODO - work out indirect stochastic row selector
 

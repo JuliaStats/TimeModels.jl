@@ -1,12 +1,14 @@
 module TimeModels
 
-using Base.Dates
+using Dates
 using Distributions
+using LinearAlgebra
+using NLopt
+using Optim
+using Printf
+using SparseArrays
 using StatsBase
 using TimeSeries
-using Optim
-using NLopt
-using Compat
 
 import Base: show
 

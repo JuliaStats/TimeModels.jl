@@ -23,29 +23,30 @@ function fit(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
     u_orig = copy(u)
     u = u'
 
-    I_nx = speye(pmodel.nx)
-    I0_nx = zeros(I_nx)
+    I_nx = sparse(1.0I, pmodel.nx, pmodel.nx)
+    I0_nx = zeros(size(I_nx))
 
-    I_ny = speye(pmodel.ny)
-    I0_ny = zeros(I_ny)
+    I_ny = sparse(1.0I, pmodel.ny, pmodel.ny)
+    I0_ny = zeros(size(I_ny))
 
-    I_nu = speye(pmodel.nu)
+    I_nu = sparse(1.0I, pmodel.nu, pmodel.nu)
 
     # Requirement: zeros-rows in G and H remain consistent
-    x_deterministic       = all(pmodel.G(1) .== 0, 2)
+    x_deterministic       = all(pmodel.G(1) .== 0; dims=2)
     all_x_deterministic   = all(x_deterministic)
 
-    y_deterministic       = all(pmodel.H(1) .== 0, 2)
+    y_deterministic       = all(pmodel.H(1) .== 0; dims=2)
     all_y_deterministic   = all(y_deterministic)
 
-    x1_deterministic      = all(pmodel.J .== 0, 2) |> full |> vec
+    x1_deterministic      = all(pmodel.J .== 0; dims=2) |> Matrix |> vec
     all_x1_deterministic  = all(x1_deterministic)
-    Id_x1                 = spdiagm(x1_deterministic)
+    Id_x1                 = spdiagm(0 => x1_deterministic)
 
     if any(x_deterministic)
-        OQ0, OQp = I_nx[find(x_deterministic), :], I_nx[find((!).(x_deterministic)), :]
+        OQ0 = I_nx[findall(vec(x_deterministic)), :]
+        OQp = I_nx[findall((!).(vec(x_deterministic))), :]
         # Id(M_t::Array{Int,2}) = spdiagm(OQ0' * all((OQ0 * M_t * OQp') .== 0, 2)[:])
-        Id = M_t -> spdiagm(OQ0' * all((OQ0 * M_t * OQp') .== 0, 2)[:])
+        Id = M_t -> spdiagm(0 => OQ0' * all((OQ0 * M_t * OQp') .== 0; dims=2)[:])
     else
         # Id(_::Array{Int,2}) = I0_nx
         Id = t -> I0_nx
@@ -106,8 +107,8 @@ function fit(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
 
         function N(t::Int)
             HRHt = HRH(t)
-            O = I_ny[find(y_notnan[:, t] .& HRH_nonzero_rows(t)), :]
-            return I - HRHt * O' * inv(O * HRHt * O') * O
+            O = I_ny[findall(y_notnan[:, t] .& HRH_nonzero_rows(t)), :]
+            return I - HRHt * O' * inv(Array(O * HRHt * O')) * O
         end #N
 
         ex  = exs[:, 1]
@@ -223,7 +224,7 @@ function fit(y::Array{T}, pmodel::ParametrizedSSM, params::SSMParameters;
                     end #if C
 
                     if estimate_R
-                        I2 = diagm(.!y_notnan[:, t])
+                        I2 = diagm(0 => .!y_notnan[:, t])
                         eyy = I2 * (Nt * HRH(t) + Nt * Ct * Pt * Ct' * Nt') * I2 + ey * ey'
                         R_S1 += pmodel.R.D' * pmodel.R.D
                         R_S2 += pmodel.R.D' * vec(xi(t) * (eyy - eyx * Ct' -
@@ -350,7 +351,7 @@ function fit(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1)
     D, D_params = parametrize_none(model.D(1))
 
     # Q, R, P1 default to parametrized as diagonal with independent elements - any other values
-    #   are ignored / set to zero 
+    #   are ignored / set to zero
     Q, Q_params = parametrize_diag(diag(model.V(1)))
     R, R_params = parametrize_diag(diag(model.W(1)))
     P1, P1_params = parametrize_diag(diag(model.P1))
@@ -362,4 +363,3 @@ function fit(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1)
     fit(y, pmodel, params, u=u, eps=eps, niter=niter)
 
 end #fit
-

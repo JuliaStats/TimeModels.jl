@@ -25,7 +25,7 @@ struct StateSpaceModel{T} <: AbstractStateSpaceModel{T}
                                 C::Function, D::Function, W::Function,
                                 x1::Vector{T}, P1::Union{Matrix{T}, SparseMatrixCSC{T}}) where {T}
 
-        ispossemidef(x::AbstractMatrix) = issymmetric(x) && (eigmin(full(x)) >= 0)
+        ispossemidef(x::AbstractMatrix) = issymmetric(x) && (eigmin(Matrix(x)) >= 0)
         @assert ispossemidef(V(1))
         @assert ispossemidef(W(1))
         @assert ispossemidef(P1)
@@ -138,13 +138,13 @@ function (pm::ParametrizedMatrix{T})(params::Vector{T}) where {T}
 end #call
 
 parametrize_full(X::Matrix{T}) where {T} =
-        ParametrizedMatrix{T}(zeros(length(X)), eye(length(X)), size(X))
+        ParametrizedMatrix{T}(zeros(length(X)), Matrix(1.0I, length(X), length(X)), size(X))
 
 function parametrize_diag(x::Vector{T}; sparse=false) where T
     n = length(x)
     f = sparse ? spzeros(n^2, 1) : zeros(n^2)
     D = sparse ? spzeros(n^2, n) : zeros(n^2, n)
-    D[[1 + (i-1)*(n^2 + n + 1) for i in 1:n]] = 1
+    D[[1 + (i-1)*(n^2 + n + 1) for i in 1:n]] .= 1
     return ParametrizedMatrix{T}(f, D, (n,n))
 end #parametrize_diag
 
@@ -210,14 +210,14 @@ end #ParametrizedSSM
 ParametrizedSSM(A2::ParametrizedMatrix{T}, Q::ParametrizedMatrix{T},
                        C2::ParametrizedMatrix{T}, R::ParametrizedMatrix{T},
                        x1::ParametrizedMatrix{T}, S::ParametrizedMatrix{T};
-                       A1::Function=_->speye(size(A2,1)), A3::Function=_->speye(size(A2,2)),
-                       B1::Function=_->speye(size(x1,1)),
+                       A1::Function=_->sparse(1.0I, size(A2,1), size(A2,1)), A3::Function=_->sparse(1.0I, size(A2,2), size(A2,2)),
+                       B1::Function=_->sparse(1.0I, size(x1,1), size(x1,1)),
                        B2::ParametrizedMatrix{T}=parametrize_none(spzeros(size(B1(1),2), 1)),
-                       G::Function=_->speye(size(x1,1)),
-                       C1::Function=_->speye(size(C2, 1)), C3::Function=_->speye(size(C2,2)),
-                       D1::Function=_->speye(size(C1(1),1)),
+                       G::Function=_->sparse(1.0I, size(x1,1), size(x1,1)),
+                       C1::Function=_->sparse(1.0I, size(C2, 1), size(C2, 1)), C3::Function=_->sparse(1.0I, size(C2,2), size(C2,2)),
+                       D1::Function=_->sparse(1.0I, size(C1(1),1), size(C1(1),1)),
                        D2::ParametrizedMatrix{T}=parametrize_none(spzeros(size(C1(1),1), 1)),
-                       H::Function=_->speye(size(C1(1),1)), J::AbstractMatrix=speye(size(x1, 1))) where {T} =
+                       H::Function=_->sparse(1.0I, size(C1(1),1), size(C1(1),1)), J::AbstractMatrix=sparse(1.0I, size(x1, 1), size(x1, 1))) where {T} =
           ParametrizedSSM{T}(A1, A2, A3, B1, B2, G, Q, C1, C2, C3, D1, D2, H, R, x1, J, S)
 
 # State space model parameters
@@ -239,7 +239,7 @@ struct SSMParameters{T}
 
 end #SSMParameters
 
-SSMParameters(__::T; A::Vector{T}=T[], B::Vector{T}=T[], Q::Vector{T}=T[],
+SSMParameters(::T; A::Vector{T}=T[], B::Vector{T}=T[], Q::Vector{T}=T[],
                C::Vector{T}=T[], D::Vector{T}=T[], R::Vector{T}=T[],
                x1::Vector{T}=T[], S::Vector{T}=T[]) where {T} =
               SSMParameters{T}(A, B, Q, C, D, R, x1, S)
@@ -356,8 +356,8 @@ function simulate(model::StateSpaceModel{T}, n::Int; u::Array{T}=zeros(n, model.
 
     # Cholesky decompositions of the covariance matrices, for generating
     # random noise
-    V_chol(t) = all(model.V(t) .== 0) ? model.V(t) : chol(Hermitian(model.V(t), :L))
-    W_chol(t) = all(model.W(t) .== 0) ? model.W(t) : chol(Hermitian(model.W(t), :L))
+    V_chol(t) = all(model.V(t) .== 0) ? model.V(t) : cholesky(Hermitian(model.V(t), :L)).U
+    W_chol(t) = all(model.W(t) .== 0) ? model.W(t) : cholesky(Hermitian(model.W(t), :L)).U
 
     # Generate the series
     x[:, 1] = model.x1
@@ -367,6 +367,5 @@ function simulate(model::StateSpaceModel{T}, n::Int; u::Array{T}=zeros(n, model.
         y[:, i] = model.C(i)   * x[:, i]   + model.D(i)   * u[:, i]   + W_chol(i) * randn(model.ny)
     end
 
-    return x', y'
+    return collect(x'), collect(y')
 end
-

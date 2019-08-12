@@ -2,29 +2,29 @@
 
 # Set up model
 function build_model()
-    F = diagm([1.0])
-    V = diagm([2.0])
+    F = diagm(0 => [1.0])
+    V = diagm(0 => [2.0])
     G = reshape([1, 2, -0.5], 3, 1)
-    W = diagm([8.0, 2.5, 4.0])
+    W = diagm(0 => [8.0, 2.5, 4.0])
     x0 = randn(1)
-    P0 = diagm([1e7])
+    P0 = diagm(0 => [1e7])
     StateSpaceModel(F, V, G, W, x0, P0)
 end
 
 # Time varying model
 function sinusoid_model(omega::Real; fs::Int=256, x0=[0.5, -0.5], W::AbstractFloat=0.1)
     F(n)  = [1.0 0; 0 1.0]
-    V(n)  = diagm([1e-10, 1e-10])
+    V(n)  = diagm(0 => [1e-10, 1e-10])
     G(n)  = [cos(2*pi*omega*(1/fs)*n) -sin(2*pi*omega*(1/fs)*n)]
-    w(n)  = diagm([W])
-    P0    = diagm([1e-1, 1e-1])
+    w(n)  = diagm(0 => [W])
+    P0    = diagm(0 => [1e-1, 1e-1])
     StateSpaceModel(F, V, G, w, x0, P0)
 end
 
 
 @testset "Kalman Filter" begin
 
-    srand(1)
+    Random.seed!(1)
 
     @testset "Time invariant models" begin
 
@@ -56,7 +56,7 @@ end
         @testset "Missing data" begin
             mod1 = build_model()
             x, y = simulate(mod1, 100)
-            y[1:9:end] = NaN
+            y[1:9:end] .= NaN
             y[100] = NaN
             filt = kalman_filter(y, mod1)
             smooth = kalman_smooth(filt)
@@ -84,14 +84,14 @@ end
 
         @testset "Linear regression test" begin
             m, b, s, dt = 5, 2, 2, .1
-            t = 0:dt:10
-            y_true = m*t + b
+            t = collect(0:dt:10)
+            y_true = m * t .+ b
             input = 100*[sin.(t./2) sin.(t./4) cos.(t./2) cos.(t./4)] .+ 10
             y_noisy = [y_true zeros(length(t)) -y_true] +
                         100*[sin.(t./2) + sin.(t./4) sin.(t./2) + cos.(t./2) cos.(t./2) + cos.(t./4)] .+ 10 .+ randn(length(t), 3)
             lm = StateSpaceModel([1 dt; 0 1], zeros(2,2),
-                                  [1. 0; 0 0; -1 0], s*eye(3),
-                                  zeros(2), 100*eye(2),
+                                  [1. 0; 0 0; -1 0], s*Matrix(1.0I, 3, 3),
+                                  zeros(2), 100*Matrix(1.0I, 2, 2),
                                   B=zeros(2, 4), D=[1. 1 0 0; 1 0 1 0; 0 0 1 1])
             lm_filt = kalman_filter(y_noisy, lm, u=input)
             @test lm_filt.filtered[end,1] ≈ y_true[end, 1] atol=3*sqrt(lm_filt.error_cov[1,1,end])
@@ -100,13 +100,13 @@ end
             stderr = sqrt.(lm_smooth.error_cov[1:1,1:1,:][:])
             @test lm_filt.filtered[end:end,:] == lm_smooth.smoothed[end:end,:]
             @test all(abs.(y_true - lm_smooth.smoothed[:,1]) .< 3*stderr)
-            @test ones(t) * lm_smooth.smoothed[1,2] ≈ lm_smooth.smoothed[:, 2] atol=1e-12
+            @test ones(size(t)) * lm_smooth.smoothed[1,2] ≈ lm_smooth.smoothed[:, 2] atol=1e-12
 
             # Repeat with DK smoother
             lm_smooth = kalman_smooth(y_noisy, lm, u=input)
             stderr = sqrt.(Float64[P[1,1] for P in lm_smooth.error_cov])
             @test all(abs.(y_true - lm_smooth.smoothed[:,1]) .< 3*stderr)
-            @test ones(t) * lm_smooth.smoothed[1,2] ≈ lm_smooth.smoothed[:, 2] atol=1e-12
+            @test ones(size(t)) * lm_smooth.smoothed[1,2] ≈ lm_smooth.smoothed[:, 2] atol=1e-12
 
         end
 
@@ -120,7 +120,7 @@ end
         end
 
         @testset "Simulations" begin
-            srand(1)
+            Random.seed!(1)
             fs = 256
             mod2 = sinusoid_model(4, fs = 256)
             x, y = TimeModels.simulate(mod2, fs*2)
@@ -129,7 +129,7 @@ end
         end
 
         @testset "Filtering" begin
-            srand(1)
+            Random.seed!(1)
             fs = 256
             mod2 = sinusoid_model(4, fs = 256)
             x, y = TimeModels.simulate(mod2, fs*2)
@@ -161,12 +161,12 @@ end
         end
 
         @testset "Smoothing" begin
-            srand(1)
+            Random.seed!(1)
             fs = 256
             mod2 = sinusoid_model(4, fs = 8192)
             x, y = TimeModels.simulate(mod2, fs*10)
             smooth = kalman_smooth(y, sinusoid_model(4, fs = 8192, x0=[1.7, -0.2]) )
-            @test mean(smooth.smoothed, 1) ≈ [0.5 -0.5] atol= 0.1
+            @test mean(smooth.smoothed; dims=1) ≈ [0.5 -0.5] atol= 0.1
 
             #= x_est = round(smooth.smoothed[end:end, :], 3) =#
             #= display(lineplot(collect(1:size(x, 1)) / fs, vec(smooth.smoothed[1:end, 1]), width = 120, title="Smoothed State 1: $(x_est[1])")) =#
@@ -181,30 +181,27 @@ end
             coeffs = randn(m)
             y = x * coeffs + s*randn(n)
 
-            I_m   = speye(m)
+            I_m   = sparse(1.0I, m, m)
             I0_m  = spzeros(m,m)
-            S     = diagm(s)
+            S     = diagm(0 => [s])
             mlm   = StateSpaceModel(
                 _->I_m, # A
                 _->I0_m, # V
                 t->x[t:t,:], # C
                 _->S, # W
                 zeros(m), # x1
-                speye(m) # P1
+                sparse(1.0I, m, m) # P1
             )
             mlm_smooth = kalman_smooth(y, mlm)
-            @test ones(n,m) .* mlm_smooth.smoothed[1:1,:] ≈ mlm_smooth.smoothed atol=1e-12
-            @test vec(mlm_smooth.smoothed[1:1,:]) ≈ coeffs atol=1e-2
+            @test ones(n,m) .* mlm_smooth.smoothed[1:1,:] ≈ mlm_smooth.smoothed atol=1e-6
+            @test vec(mlm_smooth.smoothed[1:1,:]) ≈ coeffs atol=0.1
 
             @testset "Correct failure" begin
                 @test_throws MethodError StateSpaceModel([1 0.1; 0 1], zeros(2,3), zeros(2,2),
-                    [1. 0; 0 0; -1 0], [1. 1 0 0; 1 0 1 0; 0 0 1 1], eye(3), zeros(2), 100*eye(2))
+                    [1. 0; 0 0; -1 0], [1. 1 0 0; 1 0 1 0; 0 0 1 1], Matrix(1.0I, 3, 3), zeros(2), 100*Matrix(1.0I, 2, 2))
             end
         end
 
     end
 
 end
-
-
-
