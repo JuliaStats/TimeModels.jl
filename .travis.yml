@@ -4,10 +4,15 @@ sudo: false
 os:
   - linux
 julia:
-  - 0.6
+  - 1.0
+  - 1.1
   - nightly
 notifications:
   email: false
+matrix:
+  fast_finish: true
+  allow_failures:
+    - julia: nightly
 addons:
   apt:
     packages:

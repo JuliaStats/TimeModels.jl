@@ -29,7 +29,7 @@ function Base.show(io::IO ,fit::GarchFit)
   jbstat,jbp = jbtest(fit.data./fit.sigma);
   @printf io "   Jarque-Bera Test\t\U1D6D8\u00B2\t%.6f\t%.6f\n\n" jbstat jbp
   println(io," * Error Analysis:")
-  println(io,"   \t\tEstimate\t\Std.Error\tt value \tPr(>|t|)")
+  println(io,"   \t\tEstimate\tStd.Error\tt value \tPr(>|t|)")
   @printf io "   omega\t%f\t%f\t%f\t%f\n" fit.params[1] fit.secoef[1] fit.tval[1] prt(fit.tval[1])
   @printf io "   alpha\t%f\t%f\t%f\t%f\n" fit.params[2] fit.secoef[2] fit.tval[2] prt(fit.tval[2])
   @printf io "   beta \t%f\t%f\t%f\t%f\n"  fit.params[3] fit.secoef[3] fit.tval[3] prt(fit.tval[3])
@@ -53,7 +53,7 @@ function cdHessian(par,LLH)
       x4 = copy(par)
       x4[i] -= eps[i]
       x4[j] -= eps[j]
-      H[i,j] = (LLH(x1)-LLH(x2)-LLH(x3)+LLH(x4)) / (4.*eps[i]*eps[j])
+      H[i,j] = (LLH(x1) - LLH(x2) - LLH(x3) + LLH(x4)) / (4.0 * eps[i] * eps[j])
     end
   end
   H

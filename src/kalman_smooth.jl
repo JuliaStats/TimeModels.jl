@@ -61,7 +61,7 @@ function kalman_smooth(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros
     y = y .* y_notnan
 
     x_pred_t, P_pred_t  = model.x1, model.P1
-    x, P                = zeros(model.nx, n), Array{typeof(P_pred_t)}(0)
+    x, P                = zeros(model.nx, n), Array{typeof(P_pred_t)}(undef, 0)
 
     innov_t             = zeros(model.ny)
     innov_cov_t         = zeros(model.ny, model.ny)
@@ -71,7 +71,7 @@ function kalman_smooth(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros
 
     innov               = zeros(model.ny, n)
     innov_cov_inv       = zeros(model.ny, model.ny, n)
-    KC                  = Array{typeof(KCt)}(0)
+    KC                  = Array{typeof(KCt)}(undef, 0)
 
     ut, Ct, Wt     = zeros(model.nu), model.C(1), model.W(1)
 
@@ -110,14 +110,14 @@ function kalman_smooth(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros
         missing_obs = !all(y_notnan[:, t])
         if missing_obs
             ynnt = y_notnan[:, t]
-            I1, I2 = spdiagm(ynnt), spdiagm(.!ynnt)
+            I1, I2 = spdiagm(0 => ynnt), spdiagm(0 => .!ynnt)
             Ct, Dut = I1 * Ct, I1 * Dut
             Wt = I1 * Wt * I1 + I2 * Wt * I2
         end #if
 
         # Compute nessecary filtering quantities
         innov_t           = y[:, t] - Ct * x_pred_t - Dut
-        innov_cov_t       = Ct * P_pred_t * Ct' + Wt |> full
+        innov_cov_t       = Ct * P_pred_t * Ct' + Wt |> Matrix
         nonzero_innov_cov = all(diag(innov_cov_t) .!= 0)
         innov_cov_inv_t   = nonzero_innov_cov ? inv(innov_cov_t) : I0ny
 
@@ -127,15 +127,15 @@ function kalman_smooth(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros
         nonzero_innov_cov && (log_likelihood += marginal_likelihood(innov_t, innov_cov_t, innov_cov_inv_t))
 
     end #for
-    push!(KC, zeros(KC[1]))
+    push!(KC, zeros(size(KC[1])))
 
     # Smoothing
     r = zeros(model.nx)
-    N = zeros(model.P1)
+    N = zeros(size(model.P1))
 
     for t = n:-1:1
 
-        Ct = !all(y_notnan[:, t]) ? spdiagm(y_notnan[:, t]) * model.C(t) : model.C(t)
+        Ct = !all(y_notnan[:, t]) ? spdiagm(0 => y_notnan[:, t]) * model.C(t) : model.C(t)
 
         CF = Ksparse ? sparse(Ct' * innov_cov_inv[:, :, t]) : Ct' * innov_cov_inv[:, :, t]
         P_pred_t = P[t]
@@ -150,15 +150,15 @@ function kalman_smooth(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros
 
     end #for
 
-    return KalmanSmoothedMinimal(y_orig, x', P, u_orig, model, log_likelihood)
+    return KalmanSmoothedMinimal(y_orig, collect(x'), P, u_orig, model, log_likelihood)
 
 end #smooth
 
 function lag1_smooth(y::Array{T}, u::Array{T}, m::StateSpaceModel{T}) where T
 
-    A_0, A_I  = zeros(m.A(1)), eye(m.A(1))
-    B_0, V_0, C_0 = zeros(m.B(1)), zeros(m.V(1)), zeros(m.C(1))
-    x1_0, P1_0  = zeros(m.x1), zeros(m.P1)
+    A_0, A_I  = zeros(size(m.A(1))), Matrix(1.0I, size(m.A(1)))
+    B_0, V_0, C_0 = zeros(size(m.B(1))), zeros(size(m.V(1))), zeros(size(m.C(1)))
+    x1_0, P1_0  = zeros(size(m.x1)), zeros(size(m.P1))
 
     A_stack(t) = [m.A(t) A_0; A_I A_0]
     B_stack(t) = [m.B(t); B_0]
@@ -188,10 +188,10 @@ function kalman_smooth(filt::KalmanFiltered)
     model = filt.model
     x_pred = filt.predicted'
     x_filt = filt.filtered'
-    x_smooth = zeros(x_filt)
+    x_smooth = zeros(size(x_filt))
     P_pred = filt.pred_error_cov
     P_filt = filt.error_cov
-    P_smoov = zeros(P_filt)
+    P_smoov = zeros(size(P_filt))
 
     x_smooth[:, n] = x_filt[:, n]
     P_smoov[:, :, n] = P_filt[:, :, n]
@@ -201,6 +201,14 @@ function kalman_smooth(filt::KalmanFiltered)
         P_smoov[:, :, i] = P_filt[:, :, i] + J * (P_smoov[:, :, i+1] - P_pred[:,:,i+1]) * J'
     end
 
-    return KalmanSmoothed(x_pred', x_filt', x_smooth', P_smoov, model, filt.y, filt.u, filt.loglik)
+    return KalmanSmoothed(
+        collect(x_pred'),
+        collect(x_filt'),
+        collect(x_smooth'),
+        P_smoov,
+        model,
+        filt.y,
+        filt.u,
+        filt.loglik
+    )
 end
-

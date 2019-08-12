@@ -17,6 +17,8 @@ function Base.show(io::IO, filt::KalmanFiltered{T}) where T
     println("Negative log-likelihood: $(filt.loglik)")
 end
 
+kalman_filter(y::AbstractArray, args...; kwargs...) = kalman_filter(collect(y), args...; kwargs...)
+
 function kalman_filter(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu)) where T
 
     @assert size(u,1) == size(y,1)
@@ -38,6 +40,9 @@ function kalman_filter(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros
             P_filt_i = P_pred_i
             dll = 0
         end
+        # @show x_filt_i
+        # @show P_filt_i
+        # @show dll
         return x_filt_i, P_filt_i, dll
     end #kalman_recursions
 
@@ -45,9 +50,9 @@ function kalman_filter(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros
     u = u'
     n = size(y, 2)
     x_pred = zeros(model.nx, n)
-    x_filt = zeros(x_pred)
+    x_filt = zeros(size(x_pred))
     P_pred = zeros(model.nx, model.nx, n)
-    P_filt = zeros(P_pred)
+    P_filt = zeros(size(P_pred))
     log_likelihood = n*model.ny*log(2pi)/2
 
     # first iteration
@@ -69,7 +74,7 @@ function kalman_filter(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros
         log_likelihood += dll
     end
 
-    return KalmanFiltered(x_filt', x_pred', P_filt, P_pred, model, y', u', log_likelihood)
+    return KalmanFiltered(collect(x_filt'), collect(x_pred'), P_filt, P_pred, model, collect(y'), collect(u'), log_likelihood)
 end
 
 function loglikelihood(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros(size(y,1), model.nu)) where T
@@ -124,14 +129,14 @@ function loglikelihood(y::Array{T}, model::StateSpaceModel{T}; u::Array{T}=zeros
         missing_obs = !all(y_notnan[:, t])
         if missing_obs
             ynnt = y_notnan[:, t]
-            I1, I2 = spdiagm(ynnt), spdiagm(!ynnt)
+            I1, I2 = spdiagm(0 => ynnt), spdiagm(0 => !ynnt)
             Ct, Dut = I1 * Ct, I1 * Dut
             Wt = I1 * Wt * I1 + I2 * Wt * I2
         end #if
 
         # Compute nessecary filtering quantities
         innov_t           = y[:, t] - Ct * x_pred_t - Dut
-        innov_cov_t       = Ct * P_pred_t * Ct' + Wt |> full
+        innov_cov_t       = Ct * P_pred_t * Ct' + Wt |> Matrix
         nonzero_innov_cov = all(diag(innov_cov_t) .!= 0)
         innov_cov_inv_t   = nonzero_innov_cov ? inv(innov_cov_t) : I0ny
 

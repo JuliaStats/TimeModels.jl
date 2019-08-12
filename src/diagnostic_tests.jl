@@ -9,7 +9,6 @@ function jbtest(x::Vector)
     b2 = (m4/m2^2)
     statistic = n * b1/6 + n*(b2 - 3)^2/24
     d = Chisq(2.)
-    pvalue = 1.-cdf(d,statistic)
+    pvalue = 1.0 - cdf(d,statistic)
     statistic, pvalue
 end
-
